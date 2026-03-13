@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Course Rep — Classroom Booking</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<nav class="navbar">
+  <a class="navbar-brand" href="#">
+    <div class="navbar-logo">CU</div>
+    <div>
+      <div class="navbar-title">Central University</div>
+      <div class="navbar-subtitle">Classroom Booking</div>
+    </div>
+  </a>
+  <div class="navbar-user">
+    <div class="navbar-user-info">
+      <div class="navbar-user-name" id="navUsername">—</div>
+      <div class="navbar-user-role">Course Representative</div>
+    </div>
+    <button class="btn-logout" id="logoutBtn">Sign Out</button>
+  </div>
+</nav>
+<div class="gold-bar"></div>
+
+<div class="page-container">
+  <div class="page-header">
+    <div>
+      <h1 id="greetingTitle">My Classrooms</h1>
+      <p class="page-sub" id="deptLabel"></p>
+    </div>
+    <div class="search-input-wrap">
+      <span class="search-icon">🔍</span>
+      <input class="form-input" id="searchInput" placeholder="Search classrooms…" />
+    </div>
+  </div>
+
+  <div id="myBookingsBanner"></div>
+  <div class="classrooms-grid" id="classroomsGrid">
+    <div class="empty-state"><div class="icon">⏳</div><p>Loading classrooms…</p></div>
+  </div>
+</div>
+
+<!-- BOOK MODAL -->
+<div class="modal-overlay" id="bookModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="bookModalTitle">Book Classroom</h2>
+      <button class="modal-close" id="closeBookModal">✕</button>
+    </div>
+    <form id="bookForm">
+      <div class="form-group">
+        <label class="form-label">Start Time</label>
+        <input class="form-input" type="datetime-local" name="startTime" id="startTime" required />
+      </div>
+      <div class="form-group">
+        <label class="form-label">End Time</label>
+        <input class="form-input" type="datetime-local" name="endTime" id="endTime" required />
+      </div>
+      <div id="bookAlert"></div>
+      <div class="btn-row">
+        <button type="button" class="btn btn-outline btn-full" id="cancelBookBtn">Cancel</button>
+        <button type="submit" class="btn btn-primary btn-full">Confirm Booking</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- REVIEW MODAL -->
+<div class="modal-overlay" id="reviewModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>Rate Classroom Facilities</h2>
+      <button class="modal-close" id="closeReviewModal">✕</button>
+    </div>
+    <p class="modal-sub">Your feedback helps improve our facilities. (Optional)</p>
+    <form id="reviewForm">
+      <div class="form-group">
+        <label class="form-label">Projector Quality</label>
+        <div class="star-rating">
+          <input type="radio" name="projector" id="p5" value="5"><label for="p5">★</label>
+          <input type="radio" name="projector" id="p4" value="4"><label for="p4">★</label>
+          <input type="radio" name="projector" id="p3" value="3" checked><label for="p3">★</label>
+          <input type="radio" name="projector" id="p2" value="2"><label for="p2">★</label>
+          <input type="radio" name="projector" id="p1" value="1"><label for="p1">★</label>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Desk Condition</label>
+        <div class="star-rating">
+          <input type="radio" name="desks" id="d5" value="5"><label for="d5">★</label>
+          <input type="radio" name="desks" id="d4" value="4"><label for="d4">★</label>
+          <input type="radio" name="desks" id="d3" value="3" checked><label for="d3">★</label>
+          <input type="radio" name="desks" id="d2" value="2"><label for="d2">★</label>
+          <input type="radio" name="desks" id="d1" value="1"><label for="d1">★</label>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Speakers / Audio</label>
+        <div class="star-rating">
+          <input type="radio" name="speakers" id="s5" value="5"><label for="s5">★</label>
+          <input type="radio" name="speakers" id="s4" value="4"><label for="s4">★</label>
+          <input type="radio" name="speakers" id="s3" value="3" checked><label for="s3">★</label>
+          <input type="radio" name="speakers" id="s2" value="2"><label for="s2">★</label>
+          <input type="radio" name="speakers" id="s1" value="1"><label for="s1">★</label>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Additional Comments</label>
+        <textarea class="form-textarea" name="comments" placeholder="Any issues or suggestions…"></textarea>
+      </div>
+      <div id="reviewAlert"></div>
+      <div class="btn-row">
+        <button type="button" class="btn btn-outline btn-full" id="skipReviewBtn">Skip</button>
+        <button type="submit" class="btn btn-primary btn-full">Submit Review</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- UNLOCK MODAL -->
+<div class="modal-overlay" id="unlockModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>Unlock Classroom</h2>
+      <button class="modal-close" id="closeUnlockModal">✕</button>
+    </div>
+    <p class="modal-body-text">
+      Are you sure you want to unlock <strong id="unlockRoomName"></strong> early?<br>
+      <span class="modal-note">This will mark the booking as completed and make the room available immediately.</span>
+    </p>
+    <div class="btn-row">
+      <button class="btn btn-outline btn-full" id="cancelUnlockBtn">Cancel</button>
+      <button class="btn btn-unlock btn-full" id="confirmUnlockBtn">Yes, Unlock Now</button>
+    </div>
+  </div>
+</div>
+
+<script src="script.js"></script>
+<script>
+  CourseRepPage.init();
+</script>
+</body>
+</html>

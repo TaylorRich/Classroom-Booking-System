@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Admin — Classroom Management</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<nav class="navbar">
+  <a class="navbar-brand" href="#">
+    <div class="navbar-logo">CU</div>
+    <div>
+      <div class="navbar-title">Central University</div>
+      <div class="navbar-subtitle">Facility Management</div>
+    </div>
+  </a>
+  <div class="navbar-user">
+    <div class="navbar-user-info">
+      <div class="navbar-user-name" id="navUsername">—</div>
+      <div class="navbar-user-role">Administrator</div>
+    </div>
+    <button class="btn-logout" id="logoutBtn">Sign Out</button>
+  </div>
+</nav>
+<div class="gold-bar"></div>
+
+<div class="page-container">
+  <div class="stats-grid">
+    <div class="stat-card"><div class="stat-icon">🏫</div><div><div class="stat-number" id="statRooms">…</div><div class="stat-label">Classrooms</div></div></div>
+    <div class="stat-card"><div class="stat-icon">👨‍🎓</div><div><div class="stat-number" id="statReps">…</div><div class="stat-label">Course Reps</div></div></div>
+    <div class="stat-card"><div class="stat-icon">📅</div><div><div class="stat-number" id="statBookings">…</div><div class="stat-label">Active Bookings</div></div></div>
+    <div class="stat-card"><div class="stat-icon">💬</div><div><div class="stat-number" id="statReviews">…</div><div class="stat-label">Reviews</div></div></div>
+  </div>
+
+  <div class="section-tabs" id="adminTabs">
+    <button class="tab-btn active" data-tab="classrooms">🏫 Classrooms</button>
+    <button class="tab-btn" data-tab="reps">👨‍🎓 Course Reps</button>
+    <button class="tab-btn" data-tab="reviews">💬 Reviews</button>
+  </div>
+
+  <div class="tab-panel active" id="tab-classrooms">
+    <div class="tab-panel-header">
+      <h2>Classrooms</h2>
+      <button class="btn btn-primary" id="addClassroomBtn">+ Add Classroom</button>
+    </div>
+    <div class="classrooms-grid" id="classroomsGrid">
+      <div class="empty-state"><div class="icon">⏳</div><p>Loading…</p></div>
+    </div>
+  </div>
+
+  <div class="tab-panel" id="tab-reps">
+    <div class="tab-panel-header">
+      <h2>Course Representatives</h2>
+      <button class="btn btn-primary" id="addRepBtn">+ Add Course Rep</button>
+    </div>
+    <div class="card">
+      <div class="table-wrapper">
+        <table>
+          <thead><tr><th>Username</th><th>Department</th><th>Actions</th></tr></thead>
+          <tbody id="repsTable"><tr><td colspan="3" class="table-empty">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="tab-panel" id="tab-reviews">
+    <h2 style="margin-bottom:1.2rem;">Classroom Reviews</h2>
+    <div id="reviewsContainer">
+      <div class="empty-state"><div class="icon">⏳</div><p>Loading…</p></div>
+    </div>
+  </div>
+</div>
+
+<!-- ADD/EDIT CLASSROOM MODAL -->
+<div class="modal-overlay" id="classroomModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="classroomModalTitle">Add Classroom</h2>
+      <button class="modal-close" id="closeClassroomModal">✕</button>
+    </div>
+    <form id="classroomForm">
+      <input type="hidden" id="editClassroomId" />
+      <div class="form-group">
+        <label class="form-label">Room Name</label>
+        <input class="form-input" type="text" id="roomName" placeholder="e.g. Room A101" required />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Capacity</label>
+        <input class="form-input" type="number" id="roomCapacity" placeholder="e.g. 40" min="1" required />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Available Resources</label>
+        <div class="resources-check-grid" id="resourcesCheckGrid"></div>
+        <div class="custom-resource-row">
+          <input class="form-input" type="text" id="customResource" placeholder="Add custom resource…" />
+          <button type="button" class="btn btn-outline btn-sm" id="addCustomResourceBtn">Add</button>
+        </div>
+      </div>
+      <div id="classroomAlert"></div>
+      <div class="btn-row">
+        <button type="button" class="btn btn-outline btn-full" id="cancelClassroomBtn">Cancel</button>
+        <button type="submit" class="btn btn-primary btn-full" id="classroomSubmitBtn">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ADD REP MODAL -->
+<div class="modal-overlay" id="addRepModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>Add Course Rep</h2>
+      <button class="modal-close" id="closeAddRepModal">✕</button>
+    </div>
+    <form id="addRepForm">
+      <div class="form-group">
+        <label class="form-label">Username</label>
+        <input class="form-input" type="text" name="username" placeholder="Enter username" required />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Password</label>
+        <div class="password-wrap">
+          <input class="form-input" type="password" name="password" id="repPassword" placeholder="Set a password" required />
+          <button type="button" class="pw-toggle" data-target="repPassword" aria-label="Show password">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"
+                 fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+              <circle cx="12" cy="12" r="3"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Department</label>
+        <input class="form-input" type="text" name="department" placeholder="e.g. Computer Science" required />
+      </div>
+      <div id="addRepAlert"></div>
+      <div class="btn-row">
+        <button type="button" class="btn btn-outline btn-full" id="cancelAddRepBtn">Cancel</button>
+        <button type="submit" class="btn btn-primary btn-full">Create Account</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- CONFIRM MODAL -->
+<div class="modal-overlay" id="confirmModal">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <h2>Confirm Action</h2>
+      <button class="modal-close" id="closeConfirmModal">✕</button>
+    </div>
+    <p id="confirmMsg" class="modal-body-text"></p>
+    <div class="btn-row">
+      <button class="btn btn-outline btn-full" id="cancelConfirmBtn">Cancel</button>
+      <button class="btn btn-danger btn-full" id="confirmActionBtn">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<script src="script.js"></script>
+<script>
+  AdminPage.init();
+</script>
+</body>
+</html>

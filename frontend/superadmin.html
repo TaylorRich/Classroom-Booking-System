@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Super Admin — Classroom System</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<nav class="navbar">
+  <a class="navbar-brand" href="#">
+    <div class="navbar-logo">CU</div>
+    <div>
+      <div class="navbar-title">Central University</div>
+      <div class="navbar-subtitle">Super Administration</div>
+    </div>
+  </a>
+  <div class="navbar-user">
+    <div class="navbar-user-info">
+      <div class="navbar-user-name">superadmin</div>
+      <div class="navbar-user-role" style="color:var(--gold-light);">⚡ Super Admin</div>
+    </div>
+    <button class="btn-logout" id="logoutBtn">Sign Out</button>
+  </div>
+</nav>
+<div class="gold-bar"></div>
+
+<div class="page-container">
+  <div style="margin-bottom:2rem;">
+    <h1>User Account Management</h1>
+    <p class="page-sub">Create and manage all administrator and course rep accounts.</p>
+  </div>
+
+  <div class="stats-grid" style="margin-bottom:2rem;">
+    <div class="stat-card"><div class="stat-icon">👔</div><div><div class="stat-number" id="statAdmins">…</div><div class="stat-label">Admins</div></div></div>
+    <div class="stat-card"><div class="stat-icon">👨‍🎓</div><div><div class="stat-number" id="statReps">…</div><div class="stat-label">Course Reps</div></div></div>
+    <div class="stat-card"><div class="stat-icon">👥</div><div><div class="stat-number" id="statTotal">…</div><div class="stat-label">Total Users</div></div></div>
+  </div>
+
+  <div class="section-tabs" id="superTabs">
+    <button class="tab-btn active" data-tab="admins">👔 Admins</button>
+    <button class="tab-btn" data-tab="reps">👨‍🎓 Course Reps</button>
+  </div>
+
+  <div class="tab-panel active" id="tab-admins">
+    <div class="tab-panel-header">
+      <h2>Administrators</h2>
+      <button class="btn btn-primary" id="addAdminBtn">+ Add Admin</button>
+    </div>
+    <div class="card">
+      <div class="table-wrapper">
+        <table>
+          <thead><tr><th>Username</th><th>Role</th><th>Actions</th></tr></thead>
+          <tbody id="adminsTable"><tr><td colspan="3" class="table-empty">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="tab-panel" id="tab-reps">
+    <div class="tab-panel-header">
+      <h2>Course Representatives</h2>
+      <button class="btn btn-primary" id="addRepBtn">+ Add Course Rep</button>
+    </div>
+    <div class="card">
+      <div class="table-wrapper">
+        <table>
+          <thead><tr><th>Username</th><th>Department</th><th>Actions</th></tr></thead>
+          <tbody id="repsTable"><tr><td colspan="3" class="table-empty">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- CREATE USER MODAL -->
+<div class="modal-overlay" id="createModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="createModalTitle">Create User</h2>
+      <button class="modal-close" id="closeCreateModal">✕</button>
+    </div>
+    <form id="createForm">
+      <input type="hidden" id="createRole" />
+      <div class="form-group">
+        <label class="form-label">Username</label>
+        <input class="form-input" type="text" name="username" placeholder="Enter username" required />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Password</label>
+        <div class="password-wrap">
+          <input class="form-input" type="password" name="password" id="createPassword" placeholder="Set a strong password" required />
+          <button type="button" class="pw-toggle" data-target="createPassword" aria-label="Show password">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"
+                 fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+              <circle cx="12" cy="12" r="3"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+      <div class="form-group" id="deptGroup" style="display:none;">
+        <label class="form-label">Department</label>
+        <input class="form-input" type="text" name="department" placeholder="e.g. Computer Science" />
+      </div>
+      <div id="createAlert"></div>
+      <div class="btn-row">
+        <button type="button" class="btn btn-outline btn-full" id="cancelCreateBtn">Cancel</button>
+        <button type="submit" class="btn btn-primary btn-full">Create Account</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- CONFIRM MODAL -->
+<div class="modal-overlay" id="confirmModal">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <h2>Confirm Delete</h2>
+      <button class="modal-close" id="closeConfirmModal">✕</button>
+    </div>
+    <p id="confirmMsg" class="modal-body-text"></p>
+    <div class="btn-row">
+      <button class="btn btn-outline btn-full" id="cancelConfirmBtn">Cancel</button>
+      <button class="btn btn-danger btn-full" id="confirmActionBtn">Delete</button>
+    </div>
+  </div>
+</div>
+
+<script src="script.js"></script>
+<script>
+  SuperAdminPage.init();
+</script>
+</body>
+</html>
