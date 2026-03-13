@@ -5,21 +5,40 @@ const User = require('../models/User');
 const { auth, adminAuth, superAdminAuth } = require('../middleware/auth');
 const router = express.Router();
 
-// Login - auto-detects role
+// Login - all users require a password; course_rep uses indexNumber, admin uses username
 router.post('/login', async (req, res) => {
   try {
-    const { username, password } = req.body;
+    const { username, password, indexNumber } = req.body;
+
     // Superadmin hardcoded check
     if (username === (process.env.SUPERADMIN_USER || 'superadmin') && password === (process.env.SUPERADMIN_PASS || 'superadmin123')) {
       const token = jwt.sign({ userId: 'superadmin', role: 'superadmin' }, process.env.JWT_SECRET || 'secret', { expiresIn: '7d' });
       return res.json({ token, user: { id: 'superadmin', username: 'superadmin', role: 'superadmin' } });
     }
+
+    // Course rep login — index number + password
+    if (indexNumber) {
+      const user = await User.findOne({ indexNumber: indexNumber.trim().toLowerCase() });
+      if (!user || user.role !== 'course_rep') {
+        return res.status(400).json({ error: 'Invalid index number or password.' });
+      }
+      if (!await bcrypt.compare(password, user.password)) {
+        return res.status(400).json({ error: 'Invalid index number or password.' });
+      }
+      const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET || 'secret', { expiresIn: '7d' });
+      return res.json({
+        token,
+        user: { id: user._id, fullName: user.fullName, indexNumber: user.indexNumber, level: user.level, department: user.department, role: user.role }
+      });
+    }
+
+    // Admin login — username + password
     const user = await User.findOne({ username });
     if (!user || !await bcrypt.compare(password, user.password)) {
-      return res.status(400).json({ error: 'Invalid credentials' });
+      return res.status(400).json({ error: 'Invalid username or password.' });
     }
     const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET || 'secret', { expiresIn: '7d' });
-    res.json({ token, user: { id: user._id, username: user.username, role: user.role, department: user.department } });
+    res.json({ token, user: { id: user._id, username: user.username, role: user.role } });
   } catch (error) {
     res.status(500).json({ error: 'Server error' });
   }
@@ -30,7 +49,11 @@ router.get('/me', auth, async (req, res) => {
   if (req.user === 'superadmin') {
     return res.json({ user: { id: 'superadmin', username: 'superadmin', role: 'superadmin' } });
   }
-  res.json({ user: { id: req.user._id, username: req.user.username, role: req.user.role, department: req.user.department } });
+  const u = req.user;
+  if (u.role === 'course_rep') {
+    return res.json({ user: { id: u._id, fullName: u.fullName, indexNumber: u.indexNumber, level: u.level, department: u.department, role: u.role } });
+  }
+  res.json({ user: { id: u._id, username: u.username, role: u.role } });
 });
 
 // Get all users (admin + superadmin)
@@ -38,7 +61,7 @@ router.get('/users', auth, async (req, res) => {
   try {
     const role = req.user === 'superadmin' ? 'superadmin' : req.user.role;
     if (role !== 'admin' && role !== 'superadmin') return res.status(403).json({ error: 'Access denied' });
-    const users = await User.find({}, '-password').sort({ role: 1, username: 1 });
+    const users = await User.find({}, '-password').sort({ role: 1, fullName: 1, username: 1 });
     res.json(users);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -48,11 +71,20 @@ router.get('/users', auth, async (req, res) => {
 // SuperAdmin: Create any user
 router.post('/users', auth, superAdminAuth, async (req, res) => {
   try {
-    const { username, password, role, department } = req.body;
+    const { username, password, role, department, fullName, indexNumber, level } = req.body;
     const hashedPassword = await bcrypt.hash(password, 10);
-    const user = new User({ username, password: hashedPassword, role, department });
+    let userData = { role, password: hashedPassword };
+    if (role === 'course_rep') {
+      userData = { ...userData, fullName, indexNumber: indexNumber?.trim().toLowerCase(), level: parseInt(level), department };
+    } else {
+      userData = { ...userData, username };
+    }
+    const user = new User(userData);
     await user.save();
-    res.status(201).json({ message: 'User created', user: { id: user._id, username: user.username, role: user.role, department: user.department } });
+    const out = role === 'course_rep'
+      ? { id: user._id, fullName: user.fullName, indexNumber: user.indexNumber, level: user.level, department: user.department, role: user.role }
+      : { id: user._id, username: user.username, role: user.role };
+    res.status(201).json({ message: 'User created', user: out });
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
@@ -71,9 +103,16 @@ router.delete('/users/:id', auth, superAdminAuth, async (req, res) => {
 // Admin: Create course_rep
 router.post('/register', auth, adminAuth, async (req, res) => {
   try {
-    const { username, password, department } = req.body;
+    const { fullName, indexNumber, level, department, password } = req.body;
     const hashedPassword = await bcrypt.hash(password, 10);
-    const user = new User({ username, password: hashedPassword, role: 'course_rep', department });
+    const user = new User({
+      fullName,
+      indexNumber: indexNumber?.trim().toLowerCase(),
+      level: parseInt(level),
+      department,
+      password: hashedPassword,
+      role: 'course_rep'
+    });
     await user.save();
     res.status(201).json({ message: 'Course rep created' });
   } catch (error) {

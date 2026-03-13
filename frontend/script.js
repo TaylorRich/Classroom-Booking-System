@@ -123,29 +123,37 @@ const LoginPage = {
 
     initPasswordToggles();
 
+    // Index number pattern: starts with letters then a slash e.g. csc/22/01/0561
+    const INDEX_PATTERN = /^[a-zA-Z]+\/.+$/;
+
     $('loginForm').addEventListener('submit', async (e) => {
       e.preventDefault();
-      const btn     = $('loginBtn');
-      const alertEl = $('loginAlert');
+      const btn      = $('loginBtn');
+      const alertEl  = $('loginAlert');
       alertEl.style.display = 'none';
-      btn.innerHTML = '<span class="loader"></span> Signing in…';
-      btn.disabled  = true;
+      btn.innerHTML  = '<span class="loader"></span> Signing in…';
+      btn.disabled   = true;
 
-      const username = $('username').value.trim();
-      const password = $('password').value;
+      const identifier = $('identifier').value.trim();
+      const password   = $('password').value;
+
+      // Build body based on whether identifier looks like an index number
+      const body = INDEX_PATTERN.test(identifier)
+        ? { indexNumber: identifier, password }
+        : { username: identifier, password };
 
       try {
         const res  = await fetch('/api/auth/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username, password })
+          body: JSON.stringify(body)
         });
         const data = await res.json();
         if (res.ok) {
           Auth.save(data.token, data.user);
           Auth.redirectByRole(data.user.role);
         } else {
-          alertEl.textContent   = data.error || 'Invalid username or password.';
+          alertEl.textContent   = data.error || 'Invalid credentials. Please try again.';
           alertEl.style.display = 'block';
           btn.innerHTML = 'Sign In';
           btn.disabled  = false;
@@ -177,7 +185,7 @@ const CourseRepPage = {
       Auth.clear(); window.location.href = 'index.html'; return;
     }
 
-    $('navUsername').textContent = this.user.username;
+    $('navUsername').textContent = this.user.fullName || this.user.indexNumber || 'Course Rep';
     if (this.user.department) $('deptLabel').textContent = '📚 ' + this.user.department;
 
     $('logoutBtn').addEventListener('click',        () => { Auth.clear(); window.location.href = 'index.html'; });
@@ -398,7 +406,7 @@ const AdminPage = {
       Auth.clear(); window.location.href = 'index.html'; return;
     }
 
-    $('navUsername').textContent = this.user.username;
+    $('navUsername').textContent = this.user.username || this.user.fullName || 'Admin';
     $('logoutBtn').addEventListener('click', () => { Auth.clear(); window.location.href = 'index.html'; });
 
     initTabs('adminTabs');
@@ -506,14 +514,15 @@ const AdminPage = {
   renderReps() {
     const tbody = $('repsTable');
     if (!this.allReps.length) {
-      tbody.innerHTML = `<tr><td colspan="3" class="table-empty">No course reps yet.</td></tr>`; return;
+      tbody.innerHTML = `<tr><td colspan="4" class="table-empty">No course reps yet.</td></tr>`; return;
     }
     tbody.innerHTML = this.allReps.map(r => `
       <tr>
-        <td data-label="Username"><strong>${r.username}</strong></td>
-        <td data-label="Department">${r.department || '—'}</td>
+        <td data-label="Full Name"><strong>${r.fullName || '—'}</strong></td>
+        <td data-label="Index No.">${r.indexNumber || '—'}</td>
+        <td data-label="Level / Dept">${r.level ? `Level ${r.level}` : '—'} · ${r.department || '—'}</td>
         <td data-label="Actions">
-          <button class="btn btn-danger btn-sm" data-action="del-rep" data-id="${r._id}" data-name="${r.username}">Remove</button>
+          <button class="btn btn-danger btn-sm" data-action="del-rep" data-id="${r._id}" data-name="${r.fullName || r.indexNumber}">Remove</button>
         </td>
       </tr>`).join('');
     tbody.querySelectorAll('[data-action="del-rep"]').forEach(btn =>
@@ -619,7 +628,13 @@ const AdminPage = {
   async submitAddRep(e) {
     e.preventDefault();
     const fd   = new FormData(e.target);
-    const body = { username: fd.get('username'), password: fd.get('password'), department: fd.get('department') };
+    const body = {
+      fullName:    fd.get('fullName'),
+      indexNumber: fd.get('indexNumber'),
+      level:       fd.get('level'),
+      department:  fd.get('department'),
+      password:    fd.get('password')
+    };
     const res  = await api('POST', '/auth/register', body);
     const data = await safeJson(res, {});
     if (res && res.ok) {
@@ -708,12 +723,13 @@ const SuperAdminPage = {
   renderReps() {
     const tbody = $('repsTable');
     const reps  = this.allUsers.filter(u => u.role === 'course_rep');
-    if (!reps.length) { tbody.innerHTML = `<tr><td colspan="3" class="table-empty">No course reps yet.</td></tr>`; return; }
+    if (!reps.length) { tbody.innerHTML = `<tr><td colspan="4" class="table-empty">No course reps yet.</td></tr>`; return; }
     tbody.innerHTML = reps.map(u => `
       <tr>
-        <td data-label="Username"><strong>${u.username}</strong></td>
-        <td data-label="Department">${u.department || '—'}</td>
-        <td data-label="Actions"><button class="btn btn-danger btn-sm" data-action="del" data-id="${u._id}" data-name="${u.username}">Remove</button></td>
+        <td data-label="Full Name"><strong>${u.fullName || '—'}</strong></td>
+        <td data-label="Index No.">${u.indexNumber || '—'}</td>
+        <td data-label="Level / Dept">${u.level ? `Level ${u.level}` : '—'} · ${u.department || '—'}</td>
+        <td data-label="Actions"><button class="btn btn-danger btn-sm" data-action="del" data-id="${u._id}" data-name="${u.fullName || u.indexNumber}">Remove</button></td>
       </tr>`).join('');
     tbody.querySelectorAll('[data-action="del"]').forEach(btn =>
       btn.addEventListener('click', () => this.confirmDelete(btn.dataset.id, btn.dataset.name)));
@@ -722,7 +738,8 @@ const SuperAdminPage = {
   openCreate(role) {
     $('createRole').value = role;
     $('createModalTitle').textContent = role === 'admin' ? 'Create Administrator' : 'Create Course Rep';
-    $('deptGroup').style.display = role === 'course_rep' ? 'block' : 'none';
+    $('adminCreateFields').style.display = role === 'admin'       ? 'block' : 'none';
+    $('repCreateFields').style.display   = role === 'course_rep'  ? 'block' : 'none';
     $('createAlert').innerHTML = '';
     $('createForm').reset();
     showModal('createModal');
@@ -731,7 +748,19 @@ const SuperAdminPage = {
   async submitCreate(e) {
     e.preventDefault();
     const fd   = new FormData(e.target);
-    const body = { username: fd.get('username'), password: fd.get('password'), role: $('createRole').value, department: fd.get('department') || undefined };
+    const role = $('createRole').value;
+    let body;
+    if (role === 'course_rep') {
+      body = {
+        role,
+        fullName:    fd.get('fullName'),
+        indexNumber: fd.get('indexNumber'),
+        level:       fd.get('level'),
+        department:  fd.get('department') || undefined
+      };
+    } else {
+      body = { username: fd.get('username'), password: fd.get('password'), role };
+    }
     const res  = await api('POST', '/auth/users', body);
     const data = await safeJson(res, {});
     if (res && res.ok) {
