@@ -135,21 +135,29 @@
       </div>
       <div class="form-group">
         <label class="form-label">Department</label>
-        <input class="form-input" type="text" name="department" placeholder="e.g. Computer Science" required />
+        <select class="form-input" name="department" required>
+          <option value="">Select department</option>
+          <option>Computer Science</option>
+          <option>Information Technology</option>
+          <option>Civil Engineering</option>
+          <option>Mechanical Engineering</option>
+          <option>Electrical Engineering</option>
+          <option>Architecture</option>
+          <option>Law</option>
+          <option>Business Administration</option>
+          <option>Accounting</option>
+          <option>Economics</option>
+          <option>Medicine</option>
+          <option>Nursing</option>
+          <option>Pharmacy</option>
+          <option>Psychology</option>
+          <option>Education</option>
+          <option>Communication Studies</option>
+        </select>
       </div>
-      <div class="form-group">
-        <label class="form-label">Password</label>
-        <div class="password-wrap">
-          <input class="form-input" type="password" name="password" id="repPassword" placeholder="Set a password" required />
-          <button type="button" class="pw-toggle" data-target="repPassword" aria-label="Show password">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"
-                 fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-              <circle cx="12" cy="12" r="3"/>
-            </svg>
-          </button>
-        </div>
-      </div>
+      <p style="font-size:0.82rem;color:#888;margin-top:-0.5rem;">
+          Default password: <strong>rep123</strong> — student must change it on first login.
+      </p>
       <div id="addRepAlert"></div>
       <div class="btn-row">
         <button type="button" class="btn btn-outline btn-full" id="cancelAddRepBtn">Cancel</button>

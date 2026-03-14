@@ -14,7 +14,8 @@ const Auth = {
     localStorage.setItem('user', JSON.stringify(user));
   },
   clear() { localStorage.clear(); },
-  redirectByRole(role) {
+  redirectByRole(role, mustChangePassword) {
+    if (mustChangePassword) { window.location.href = 'changepassword.html'; return; }
     const map = { superadmin: 'superadmin.html', admin: 'admin.html', course_rep: 'courserep.html' };
     window.location.href = map[role] || 'index.html';
   }
@@ -151,7 +152,7 @@ const LoginPage = {
         const data = await res.json();
         if (res.ok) {
           Auth.save(data.token, data.user);
-          Auth.redirectByRole(data.user.role);
+          Auth.redirectByRole(data.user.role, data.user.mustChangePassword);
         } else {
           alertEl.textContent   = data.error || 'Invalid credentials. Please try again.';
           alertEl.style.display = 'block';
@@ -292,7 +293,10 @@ const CourseRepPage = {
             </span>
           </div>
           ${c.resources?.length ? `<div class="resources-list">${c.resources.map(r => `<span class="resource-chip">${r}</span>`).join('')}</div>` : ''}
-          ${locked ? `<div class="booking-time">Until: ${fmt(activeBooking.endTime)}</div>` : ''}
+          ${locked ? `<div class="booking-time">
+            🔒 Booked by <strong>${activeBooking.courseRep?.fullName || activeBooking.courseRep?.indexNumber || 'Someone'}</strong>
+            ${activeBooking.courseRep?.department ? '(' + activeBooking.courseRep.department + ')' : ''}<br>Until: ${fmt(activeBooking.endTime)}
+          </div>` : ''}
           ${avgP ? `
             <div class="ratings-row">
               <div class="rating-item"><div class="rating-score">${avgP}</div><div class="rating-label">Projector</div></div>
@@ -481,7 +485,8 @@ const AdminPage = {
       return;
     }
     grid.innerHTML = this.allClassrooms.map(c => {
-      const locked = c.bookings.some(b => b.status === 'active' && new Date(b.endTime) > now);
+      const activeBooking = c.bookings.find(b => b.status === 'active' && new Date(b.endTime) > now);
+      const locked = !!activeBooking;
       return `
         <div class="classroom-card ${!c.isActive ? 'locked' : ''}">
           <div class="classroom-header">
@@ -494,9 +499,15 @@ const AdminPage = {
             </span>
           </div>
           ${c.resources?.length ? `<div class="resources-list">${c.resources.map(r => `<span class="resource-chip">${r}</span>`).join('')}</div>` : ''}
+          ${locked ? `<div class="booking-time">
+            Booked by <strong>${activeBooking.courseRep?.fullName || activeBooking.courseRep?.indexNumber || 'Unknown'}</strong>
+            ${activeBooking.courseRep?.department ? '(' + activeBooking.courseRep.department + ')' : ''}<br>Until: ${fmt(activeBooking.endTime)}
+          </div>` : ''}
           <div class="classroom-meta">${c.bookings.length} bookings · ${c.comments.length} reviews</div>
           <div class="card-actions">
             <button class="btn btn-outline btn-sm" data-action="edit" data-cid="${c._id}">✏️ Edit</button>
+            ${locked ? `<button class="btn btn-unlock btn-sm" data-action="unlock"
+              data-cid="${c._id}" data-bid="${activeBooking._id}" data-name="${c.name}">🔓 Unlock</button>` : ''}
             <button class="btn btn-sm ${c.isActive ? 'btn-danger' : 'btn-gold'}"
               data-action="toggle" data-cid="${c._id}" data-active="${c.isActive}">
               ${c.isActive ? '❌ Deactivate' : '✅ Reactivate'}
@@ -509,6 +520,8 @@ const AdminPage = {
       btn.addEventListener('click', () => this.openEditClassroom(btn.dataset.cid)));
     grid.querySelectorAll('[data-action="toggle"]').forEach(btn =>
       btn.addEventListener('click', () => this.toggleClassroom(btn.dataset.cid, btn.dataset.active === 'true')));
+    grid.querySelectorAll('[data-action="unlock"]').forEach(btn =>
+      btn.addEventListener('click', () => this.unlockClassroom(btn.dataset.cid, btn.dataset.bid, btn.dataset.name)));
   },
 
   renderReps() {
@@ -532,15 +545,22 @@ const AdminPage = {
   renderReviews() {
     const container = $('reviewsContainer');
     const all = [];
-    this.allClassrooms.forEach(c => c.comments.forEach(r => all.push({ ...r, classroomName: c.name })));
+    this.allClassrooms.forEach(c => c.comments.forEach(r => all.push({ ...r, classroomName: c.name, classroomId: c._id })));
     all.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
     if (!all.length) {
       container.innerHTML = `<div class="empty-state"><div class="icon">💬</div><p>No reviews yet.</p></div>`; return;
     }
     container.innerHTML = all.map(r => `
       <div class="review-card">
-        <div class="review-meta">
-          <strong>${r.classroomName}</strong> · ${r.courseRep?.username || 'Unknown'} · ${new Date(r.createdAt).toLocaleDateString('en-GB')}
+        <div class="review-meta" style="display:flex;justify-content:space-between;align-items:flex-start;">
+          <div>
+            <strong>${r.classroomName}</strong> ·
+            ${r.courseRep?.fullName || r.courseRep?.indexNumber || 'Unknown'}
+            ${r.courseRep?.department ? '(' + r.courseRep.department + ')' : ''} ·
+            ${new Date(r.createdAt).toLocaleDateString('en-GB')}
+          </div>
+          <button class="btn btn-danger btn-sm" data-action="del-review"
+            data-cid="${r.classroomId}" data-rid="${r._id}">🗑 Delete</button>
         </div>
         <div class="review-stars">
           Projector: ${'★'.repeat(r.projector||0)}${'☆'.repeat(5-(r.projector||0))} &nbsp;
@@ -549,6 +569,30 @@ const AdminPage = {
         </div>
         ${r.comments ? `<p class="review-comment">"${r.comments}"</p>` : ''}
       </div>`).join('');
+
+    container.querySelectorAll('[data-action="del-review"]').forEach(btn =>
+      btn.addEventListener('click', () => this.deleteReview(btn.dataset.cid, btn.dataset.rid)));
+  },
+
+  async deleteReview(classroomId, commentId) {
+    this.confirmCallback = async () => {
+      const res = await api('DELETE', `/classrooms/${classroomId}/comment/${commentId}`);
+      if (res && res.ok) { showToast('Review deleted.'); this.loadAll(); }
+      else { const d = await safeJson(res, {}); showToast(d.error || 'Failed', 'error'); }
+    };
+    $('confirmMsg').textContent = 'Delete this review? This cannot be undone.';
+    showModal('confirmModal');
+  },
+
+  unlockClassroom(classroomId, bookingId, name) {
+    this.confirmCallback = async () => {
+      const res  = await api('PATCH', `/classrooms/${classroomId}/unlock/${bookingId}`);
+      const data = await safeJson(res, {});
+      if (res && res.ok) { showToast(name + ' unlocked.'); this.loadAll(); }
+      else { showToast(data.error || 'Failed to unlock', 'error'); }
+    };
+    $('confirmMsg').textContent = 'Unlock "' + name + '" early? The current booking will be ended.';
+    showModal('confirmModal');
   },
 
   buildResourcesGrid(selected = []) {
@@ -632,13 +676,12 @@ const AdminPage = {
       fullName:    fd.get('fullName'),
       indexNumber: fd.get('indexNumber'),
       level:       fd.get('level'),
-      department:  fd.get('department'),
-      password:    fd.get('password')
+      department:  fd.get('department')
     };
     const res  = await api('POST', '/auth/register', body);
     const data = await safeJson(res, {});
     if (res && res.ok) {
-      closeModal('addRepModal'); showToast('Course rep added!'); this.loadAll();
+      closeModal('addRepModal'); showToast('Course rep added! Default password: rep123'); this.loadAll();
     } else {
       $('addRepAlert').innerHTML = `<div class="alert alert-error">${data.error || 'Failed to create rep.'}</div>`;
     }
@@ -764,7 +807,7 @@ const SuperAdminPage = {
     const res  = await api('POST', '/auth/users', body);
     const data = await safeJson(res, {});
     if (res && res.ok) {
-      closeModal('createModal'); showToast('User created successfully!'); this.loadUsers();
+      closeModal('createModal'); showToast(role === 'course_rep' ? 'Course rep created! Default password: rep123' : 'User created successfully!'); this.loadUsers();
     } else {
       $('createAlert').innerHTML = `<div class="alert alert-error">${data.error || 'Failed to create user.'}</div>`;
     }
@@ -778,5 +821,76 @@ const SuperAdminPage = {
     };
     $('confirmMsg').textContent = `Permanently delete user "${name}"? This cannot be undone.`;
     showModal('confirmModal');
+  }
+};
+// ─────────────────────────────────────────────────────────────
+// CHANGE PASSWORD PAGE
+// ─────────────────────────────────────────────────────────────
+
+const ChangePasswordPage = {
+  init() {
+    const token = Auth.getToken();
+    const user  = Auth.getUser();
+    if (!token || !user) { window.location.href = 'index.html'; return; }
+    if (!user.mustChangePassword) { Auth.redirectByRole(user.role); return; }
+
+    initPasswordToggles();
+
+    $('cpForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const alertEl = $('cpAlert');
+      const btn     = $('cpBtn');
+      alertEl.style.display = 'none';
+
+      const currentPassword = $('currentPassword').value;
+      const newPassword     = $('newPassword').value;
+      const confirmPassword = $('confirmPassword').value;
+
+      if (newPassword.length < 6) {
+        alertEl.textContent = 'New password must be at least 6 characters.';
+        alertEl.className = 'alert alert-error';
+        alertEl.style.display = 'block'; return;
+      }
+      if (newPassword !== confirmPassword) {
+        alertEl.textContent = 'Passwords do not match.';
+        alertEl.className = 'alert alert-error';
+        alertEl.style.display = 'block'; return;
+      }
+
+      btn.innerHTML = '<span class="loader"></span> Saving…';
+      btn.disabled  = true;
+
+      try {
+        const res  = await fetch('/api/auth/change-password', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${Auth.getToken()}`
+          },
+          body: JSON.stringify({ currentPassword, newPassword })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          const updatedUser = { ...user, mustChangePassword: false };
+          Auth.save(token, updatedUser);
+          alertEl.textContent = '✅ Password changed! Redirecting…';
+          alertEl.className = 'alert alert-success';
+          alertEl.style.display = 'block';
+          setTimeout(() => Auth.redirectByRole(user.role), 1200);
+        } else {
+          alertEl.textContent = data.error || 'Failed to change password.';
+          alertEl.className = 'alert alert-error';
+          alertEl.style.display = 'block';
+          btn.innerHTML = 'Set Password & Continue';
+          btn.disabled  = false;
+        }
+      } catch {
+        alertEl.textContent = 'Cannot reach server.';
+        alertEl.className = 'alert alert-error';
+        alertEl.style.display = 'block';
+        btn.innerHTML = 'Set Password & Continue';
+        btn.disabled  = false;
+      }
+    });
   }
 };

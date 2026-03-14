@@ -20,6 +20,8 @@ const userSchema = new mongoose.Schema({
   },
   department:  { type: String, required: function() { return this.role === 'course_rep'; } },
 
+  mustChangePassword: { type: Boolean, default: false },
+
   role: { type: String, enum: ['course_rep', 'admin'], required: true }
 }, { timestamps: true });
 

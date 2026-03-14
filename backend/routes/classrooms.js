@@ -3,6 +3,19 @@ const Classroom = require('../models/Classroom');
 const { auth, adminAuth } = require('../middleware/auth');
 const router = express.Router();
 
+// Auto-expire bookings whose endTime has passed
+async function expireBookings(classroom) {
+  const now = new Date();
+  let changed = false;
+  classroom.bookings.forEach(b => {
+    if (b.status === 'active' && new Date(b.endTime) <= now) {
+      b.status = 'completed';
+      changed = true;
+    }
+  });
+  if (changed) await classroom.save();
+}
+
 // Course rep: Get all active classrooms
 router.get('/', auth, async (req, res) => {
   try {
@@ -10,7 +23,12 @@ router.get('/', auth, async (req, res) => {
       .populate('bookings.courseRep', 'fullName indexNumber department')
       .populate('comments.courseRep', 'fullName indexNumber department')
       .sort({ name: 1 });
-    res.json(classrooms);
+    await Promise.all(classrooms.map(expireBookings));
+    const fresh = await Classroom.find({ isActive: true })
+      .populate('bookings.courseRep', 'fullName indexNumber department')
+      .populate('comments.courseRep', 'fullName indexNumber department')
+      .sort({ name: 1 });
+    res.json(fresh);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -23,7 +41,12 @@ router.get('/all', auth, adminAuth, async (req, res) => {
       .populate('bookings.courseRep', 'fullName indexNumber department')
       .populate('comments.courseRep', 'fullName indexNumber department')
       .sort({ name: 1 });
-    res.json(classrooms);
+    await Promise.all(classrooms.map(expireBookings));
+    const fresh = await Classroom.find()
+      .populate('bookings.courseRep', 'fullName indexNumber department')
+      .populate('comments.courseRep', 'fullName indexNumber department')
+      .sort({ name: 1 });
+    res.json(fresh);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -41,7 +64,7 @@ router.post('/', auth, adminAuth, async (req, res) => {
   }
 });
 
-// Admin: Edit classroom (name, capacity, resources, isActive)
+// Admin: Edit classroom
 router.patch('/:id', auth, adminAuth, async (req, res) => {
   try {
     const updates = {};
@@ -55,7 +78,7 @@ router.patch('/:id', auth, adminAuth, async (req, res) => {
   }
 });
 
-// Admin: Delete classroom
+// Admin: Deactivate classroom
 router.delete('/:id', auth, adminAuth, async (req, res) => {
   try {
     await Classroom.findByIdAndUpdate(req.params.id, { isActive: false });
@@ -73,6 +96,8 @@ router.post('/:id/book', auth, async (req, res) => {
     if (!classroom) return res.status(404).json({ error: 'Classroom not found' });
     if (!classroom.isActive) return res.status(400).json({ error: 'Classroom is not active' });
 
+    await expireBookings(classroom);
+
     const conflict = classroom.bookings.find(b =>
       b.status === 'active' &&
       new Date(startTime) < new Date(b.endTime) &&
@@ -88,20 +113,24 @@ router.post('/:id/book', auth, async (req, res) => {
   }
 });
 
-// Course rep: Unlock (end booking early)
+// Course rep OR Admin: Unlock (end booking early)
 router.patch('/:id/unlock/:bookingId', auth, async (req, res) => {
   try {
     const classroom = await Classroom.findById(req.params.id);
     if (!classroom) return res.status(404).json({ error: 'Classroom not found' });
     const booking = classroom.bookings.id(req.params.bookingId);
     if (!booking) return res.status(404).json({ error: 'Booking not found' });
-    if (booking.courseRep.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ error: 'Not your booking' });
+
+    const isAdmin = req.userRole === 'admin' || req.userRole === 'superadmin';
+    const isOwner = req.user !== 'superadmin' && booking.courseRep.toString() === req.user._id.toString();
+    if (!isAdmin && !isOwner) {
+      return res.status(403).json({ error: 'Not authorized to unlock this booking' });
     }
+
     booking.status = 'completed';
     booking.endTime = new Date();
     await classroom.save();
-    res.json({ message: 'Classroom unlocked' });
+    res.json({ message: 'Classroom unlocked successfully' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -116,6 +145,21 @@ router.post('/:id/comment', auth, async (req, res) => {
     classroom.comments.push({ courseRep: req.user._id, projector, desks, speakers, comments });
     await classroom.save();
     res.json({ message: 'Review added successfully' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Admin: Delete a review
+router.delete('/:id/comment/:commentId', auth, adminAuth, async (req, res) => {
+  try {
+    const classroom = await Classroom.findById(req.params.id);
+    if (!classroom) return res.status(404).json({ error: 'Classroom not found' });
+    const comment = classroom.comments.id(req.params.commentId);
+    if (!comment) return res.status(404).json({ error: 'Review not found' });
+    comment.deleteOne();
+    await classroom.save();
+    res.json({ message: 'Review deleted' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
