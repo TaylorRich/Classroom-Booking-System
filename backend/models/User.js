@@ -22,6 +22,11 @@ const userSchema = new mongoose.Schema({
 
   mustChangePassword: { type: Boolean, default: false },
 
+  // 2FA fields (admin only — superadmin uses env var)
+  twoFactorSecret:  { type: String, default: null },    // TOTP secret
+  twoFactorEnabled: { type: Boolean, default: false },  // true once setup complete
+  twoFactorPending: { type: Boolean, default: false },  // true while QR is being shown
+
   role: { type: String, enum: ['course_rep', 'admin'], required: true }
 }, { timestamps: true });
 

@@ -117,14 +117,17 @@ function initTabs(containerId) {
 // ─────────────────────────────────────────────────────────────
 
 const LoginPage = {
+  tempToken: null,   // holds partial JWT during 2FA step
+  isSetup:   false,  // true when we're on first-time 2FA setup screen
+
   init() {
     const token = Auth.getToken();
     const user  = Auth.getUser();
     if (token && user) { Auth.redirectByRole(user.role); return; }
 
     initPasswordToggles();
+    this._inject2FAModal();
 
-    // Index number pattern: starts with letters then a slash e.g. csc/22/01/0561
     const INDEX_PATTERN = /^[a-zA-Z]+\/.+$/;
 
     $('loginForm').addEventListener('submit', async (e) => {
@@ -138,7 +141,6 @@ const LoginPage = {
       const identifier = $('identifier').value.trim();
       const password   = $('password').value;
 
-      // Build body based on whether identifier looks like an index number
       const body = INDEX_PATTERN.test(identifier)
         ? { indexNumber: identifier, password }
         : { username: identifier, password };
@@ -150,9 +152,24 @@ const LoginPage = {
           body: JSON.stringify(body)
         });
         const data = await res.json();
+
         if (res.ok) {
-          Auth.save(data.token, data.user);
-          Auth.redirectByRole(data.user.role, data.user.mustChangePassword);
+          if (data.requiresTwoFactorSetup) {
+            this.tempToken = data.tempToken;
+            this.isSetup   = true;
+            this._show2FASetup(data.qrCodeUrl, data.secret);
+            btn.innerHTML = 'Sign In';
+            btn.disabled  = false;
+          } else if (data.requiresTwoFactor) {
+            this.tempToken = data.tempToken;
+            this.isSetup   = false;
+            this._show2FAVerify();
+            btn.innerHTML = 'Sign In';
+            btn.disabled  = false;
+          } else {
+            Auth.save(data.token, data.user);
+            Auth.redirectByRole(data.user.role, data.user.mustChangePassword);
+          }
         } else {
           alertEl.textContent   = data.error || 'Invalid credentials. Please try again.';
           alertEl.style.display = 'block';
@@ -166,6 +183,136 @@ const LoginPage = {
         btn.disabled  = false;
       }
     });
+  },
+
+  _inject2FAModal() {
+    const modal = document.createElement('div');
+    modal.id = 'twoFAModal';
+    modal.style.cssText = `
+      display:none; position:fixed; inset:0; z-index:9999;
+      background:rgba(0,0,0,0.6); align-items:center; justify-content:center;
+    `;
+    modal.innerHTML = `
+      <div style="background:#fff; border-radius:16px; padding:2rem; max-width:420px; width:90%; box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+        <div id="twoFASetupSection" style="display:none;">
+          <h2 style="margin:0 0 0.5rem; font-size:1.3rem; color:#1e293b;">🔐 Set Up Two-Factor Authentication</h2>
+          <p style="color:#64748b; font-size:0.9rem; margin:0 0 1rem;">
+            Scan this QR code with <strong>Google Authenticator</strong> (or any TOTP app), then enter the 6-digit code to confirm.
+          </p>
+          <div style="text-align:center; margin-bottom:1rem;">
+            <img id="twoFAQR" src="" alt="QR Code" style="width:200px; height:200px; border:1px solid #e2e8f0; border-radius:8px;">
+          </div>
+          <details style="margin-bottom:1rem;">
+            <summary style="cursor:pointer; color:#64748b; font-size:0.8rem;">Can't scan? Enter key manually</summary>
+            <code id="twoFASecret" style="display:block; background:#f1f5f9; padding:0.5rem; border-radius:6px; font-size:0.85rem; word-break:break-all; margin-top:0.5rem;"></code>
+          </details>
+        </div>
+        <div id="twoFAVerifySection" style="display:none;">
+          <h2 style="margin:0 0 0.5rem; font-size:1.3rem; color:#1e293b;">🔑 Two-Factor Authentication</h2>
+          <p style="color:#64748b; font-size:0.9rem; margin:0 0 1rem;">
+            Open <strong>Google Authenticator</strong> and enter the 6-digit code for this account.
+          </p>
+        </div>
+        <div id="twoFAError" style="display:none; background:#fef2f2; color:#dc2626; border:1px solid #fca5a5; border-radius:8px; padding:0.75rem; margin-bottom:1rem; font-size:0.875rem;"></div>
+        <div style="display:flex; gap:0.5rem; flex-direction:column;">
+          <input id="totpCodeInput" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6"
+            placeholder="Enter 6-digit code"
+            style="width:100%; box-sizing:border-box; padding:0.75rem 1rem; border:1.5px solid #cbd5e1; border-radius:8px; font-size:1.1rem; text-align:center; letter-spacing:0.3em; outline:none;"
+            autocomplete="one-time-code">
+          <button id="twoFASubmitBtn" style="width:100%; padding:0.75rem; background:#3b5bdb; color:#fff; border:none; border-radius:8px; font-size:1rem; font-weight:600; cursor:pointer;">
+            Verify
+          </button>
+          <button id="twoFACancelBtn" style="width:100%; padding:0.6rem; background:none; border:none; color:#94a3b8; font-size:0.875rem; cursor:pointer;">
+            Cancel
+          </button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+
+    $('twoFASubmitBtn').addEventListener('click', () => this._submitTOTP());
+    $('twoFACancelBtn').addEventListener('click', () => this._hide2FAModal());
+    $('totpCodeInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') this._submitTOTP(); });
+    $('totpCodeInput').addEventListener('input', (e) => {
+      if (e.target.value.replace(/\D/g,'').length === 6) this._submitTOTP();
+    });
+  },
+
+  _show2FASetup(qrCodeUrl, secret) {
+    $('twoFASetupSection').style.display = 'block';
+    $('twoFAVerifySection').style.display = 'none';
+    $('twoFAQR').src = qrCodeUrl;
+    $('twoFASecret').textContent = secret || '';
+    $('twoFAError').style.display = 'none';
+    $('totpCodeInput').value = '';
+    $('twoFASubmitBtn').textContent = 'Confirm Setup';
+    const modal = $('twoFAModal');
+    modal.style.display = 'flex';
+    setTimeout(() => $('totpCodeInput').focus(), 100);
+  },
+
+  _show2FAVerify() {
+    $('twoFASetupSection').style.display = 'none';
+    $('twoFAVerifySection').style.display = 'block';
+    $('twoFAError').style.display = 'none';
+    $('totpCodeInput').value = '';
+    $('twoFASubmitBtn').textContent = 'Verify';
+    const modal = $('twoFAModal');
+    modal.style.display = 'flex';
+    setTimeout(() => $('totpCodeInput').focus(), 100);
+  },
+
+  _hide2FAModal() {
+    $('twoFAModal').style.display = 'none';
+    this.tempToken = null;
+    this.isSetup   = false;
+  },
+
+  async _submitTOTP() {
+    const code = $('totpCodeInput').value.replace(/\D/g, '').trim();
+    const errorEl = $('twoFAError');
+    const btn = $('twoFASubmitBtn');
+
+    errorEl.style.display = 'none';
+    if (code.length !== 6) {
+      errorEl.textContent = 'Please enter the full 6-digit code.';
+      errorEl.style.display = 'block';
+      return;
+    }
+
+    btn.textContent = '…';
+    btn.disabled = true;
+
+    const endpoint = this.isSetup ? '/api/auth/confirm-2fa-setup' : '/api/auth/verify-2fa';
+    try {
+      const res  = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tempToken: this.tempToken, totpCode: code })
+      });
+      const data = await res.json();
+
+      if (res.ok) {
+        if (data.newTotpSecret) {
+          alert(`✅ 2FA setup complete!\n\nAdd this line to your backend .env file and restart the server:\n\nSUPERADMIN_TOTP_SECRET=${data.newTotpSecret}`);
+        }
+        this._hide2FAModal();
+        Auth.save(data.token, data.user);
+        Auth.redirectByRole(data.user.role, data.user.mustChangePassword);
+      } else {
+        errorEl.textContent = data.error || 'Invalid code. Please try again.';
+        errorEl.style.display = 'block';
+        $('totpCodeInput').value = '';
+        $('totpCodeInput').focus();
+        btn.textContent = this.isSetup ? 'Confirm Setup' : 'Verify';
+        btn.disabled = false;
+      }
+    } catch {
+      errorEl.textContent = 'Cannot reach server.';
+      errorEl.style.display = 'block';
+      btn.textContent = this.isSetup ? 'Confirm Setup' : 'Verify';
+      btn.disabled = false;
+    }
   }
 };
 
@@ -211,7 +358,6 @@ const CourseRepPage = {
     const res  = await api('GET', '/classrooms');
     const data = await safeJson(res, []);
 
-    // Guard: must be an array
     if (!Array.isArray(data)) {
       grid.innerHTML = `<div class="empty-state"><div class="icon">⚠️</div><p>${data.error || 'Failed to load classrooms.'}</p></div>`;
       return;
@@ -435,7 +581,6 @@ const AdminPage = {
   },
 
   async loadAll() {
-    // Show loading state in stats
     ['statRooms','statReps','statBookings','statReviews'].forEach(id => { if ($(id)) $(id).textContent = '…'; });
 
     const [resC, resU] = await Promise.all([
@@ -446,7 +591,6 @@ const AdminPage = {
     const classroomsData = await safeJson(resC, []);
     const usersData      = await safeJson(resU, []);
 
-    // Guard: if either response is an error object instead of array, show a toast
     if (!Array.isArray(classroomsData)) {
       showToast(classroomsData.error || 'Failed to load classrooms.', 'error');
       $('classroomsGrid').innerHTML = `<div class="empty-state"><div class="icon">⚠️</div><p>${classroomsData.error || 'Could not load classrooms.'}</p></div>`;
@@ -752,15 +896,37 @@ const SuperAdminPage = {
   renderAdmins() {
     const tbody  = $('adminsTable');
     const admins = this.allUsers.filter(u => u.role === 'admin');
-    if (!admins.length) { tbody.innerHTML = `<tr><td colspan="3" class="table-empty">No admins yet.</td></tr>`; return; }
+    if (!admins.length) { tbody.innerHTML = `<tr><td colspan="4" class="table-empty">No admins yet.</td></tr>`; return; }
     tbody.innerHTML = admins.map(u => `
       <tr>
         <td data-label="Username"><strong>${u.username}</strong></td>
         <td data-label="Role"><span class="badge badge-admin">Admin</span></td>
-        <td data-label="Actions"><button class="btn btn-danger btn-sm" data-action="del" data-id="${u._id}" data-name="${u.username}">Remove</button></td>
+        <td data-label="2FA">
+          ${u.twoFactorEnabled
+            ? '<span style="color:#16a34a;font-weight:600;">✅ Enabled</span>'
+            : '<span style="color:#dc2626;font-weight:600;">⚠️ Not set up</span>'}
+        </td>
+        <td data-label="Actions" style="display:flex;gap:0.4rem;flex-wrap:wrap;">
+          ${u.twoFactorEnabled ? `<button class="btn btn-sm" style="background:#f59e0b;color:#fff;" data-action="reset2fa" data-id="${u._id}" data-name="${u.username}" title="Reset 2FA so admin sets it up again on next login">Reset 2FA</button>` : ''}
+          <button class="btn btn-danger btn-sm" data-action="del" data-id="${u._id}" data-name="${u.username}">Remove</button>
+        </td>
       </tr>`).join('');
     tbody.querySelectorAll('[data-action="del"]').forEach(btn =>
       btn.addEventListener('click', () => this.confirmDelete(btn.dataset.id, btn.dataset.name)));
+    tbody.querySelectorAll('[data-action="reset2fa"]').forEach(btn =>
+      btn.addEventListener('click', () => this.reset2FA(btn.dataset.id, btn.dataset.name)));
+  },
+
+  async reset2FA(id, name) {
+    if (!confirm(`Reset 2FA for "${name}"? They will be required to set it up again on next login.`)) return;
+    const res  = await api('DELETE', `/auth/users/${id}/2fa`);
+    const data = await safeJson(res, {});
+    if (res && res.ok) {
+      showToast(data.message || '2FA reset successfully.', 'success');
+      await this.loadUsers();
+    } else {
+      showToast(data.error || 'Failed to reset 2FA.', 'error');
+    }
   },
 
   renderReps() {
@@ -807,7 +973,9 @@ const SuperAdminPage = {
     const res  = await api('POST', '/auth/users', body);
     const data = await safeJson(res, {});
     if (res && res.ok) {
-      closeModal('createModal'); showToast(role === 'course_rep' ? 'Course rep created! Default password: rep123' : 'User created successfully!'); this.loadUsers();
+      closeModal('createModal');
+      showToast(role === 'course_rep' ? 'Course rep created! Default password: rep123' : 'User created successfully!');
+      this.loadUsers();
     } else {
       $('createAlert').innerHTML = `<div class="alert alert-error">${data.error || 'Failed to create user.'}</div>`;
     }
@@ -823,6 +991,7 @@ const SuperAdminPage = {
     showModal('confirmModal');
   }
 };
+
 // ─────────────────────────────────────────────────────────────
 // CHANGE PASSWORD PAGE
 // ─────────────────────────────────────────────────────────────

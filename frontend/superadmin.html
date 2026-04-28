@@ -51,8 +51,8 @@
     <div class="card">
       <div class="table-wrapper">
         <table>
-          <thead><tr><th>Username</th><th>Role</th><th>Actions</th></tr></thead>
-          <tbody id="adminsTable"><tr><td colspan="3" class="table-empty">Loading…</td></tr></tbody>
+          <thead><tr><th>Username</th><th>Role</th><th>2FA Status</th><th>Actions</th></tr></thead>
+          <tbody id="adminsTable"><tr><td colspan="4" class="table-empty">Loading…</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -84,7 +84,7 @@
     <form id="createForm">
       <input type="hidden" id="createRole" />
 
-      <!-- Admin fields (shown for admin role) -->
+      <!-- Admin fields -->
       <div id="adminCreateFields">
         <div class="form-group">
           <label class="form-label">Username</label>
@@ -103,9 +103,12 @@
             </button>
           </div>
         </div>
+        <p style="font-size:0.82rem;color:#888;margin-top:-0.5rem;">
+          🔐 This admin will be prompted to set up Google Authenticator on their first login.
+        </p>
       </div>
 
-      <!-- Course Rep fields (shown for course_rep role) -->
+      <!-- Course Rep fields -->
       <div id="repCreateFields" style="display:none;">
         <div class="form-group">
           <label class="form-label">Full Name</label>
