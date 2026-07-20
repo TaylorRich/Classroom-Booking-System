@@ -13,6 +13,10 @@ const APP_NAME     = process.env.APP_NAME || 'ClassroomBooking';
 
 const getSuperadminSecret = () => process.env.SUPERADMIN_TOTP_SECRET || null;
 
+// Default password an account is reset to when an admin/superadmin resets it
+// (mirrors the existing "rep123" default used when a course rep is first created).
+const DEFAULT_RESET_PASSWORD = { course_rep: 'rep123', admin: 'admin123' };
+
 // Partial token (password OK, 2FA still pending) — expires in 5 min
 function partialToken(payload) {
   return jwt.sign({ ...payload, twoFactorPending: true }, JWT_SECRET(), { expiresIn: '5m' });
@@ -107,11 +111,48 @@ router.post('/login', async (req, res) => {
 
     // Fallback (shouldn't be reached in normal operation)
     const token = fullToken({ userId: user._id });
-    res.json({ token, user: { id: user._id, username: user.username, role: user.role } });
+    res.json({ token, user: { id: user._id, username: user.username, role: user.role, mustChangePassword: user.mustChangePassword } });
 
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// ─── FORGOT PASSWORD ──────────────────────────────────────────────────────
+// POST /api/auth/forgot-password
+// Public. No email system in place, so this just flags the account —
+// the responsible admin/superadmin sees it and resets it manually.
+// Body: { identifier }  (username for admin, index number for course rep)
+router.post('/forgot-password', async (req, res) => {
+  try {
+    const identifier = (req.body.identifier || '').trim();
+    if (!identifier) {
+      return res.status(400).json({ error: 'Please enter your username or index number.' });
+    }
+
+    if (identifier === (process.env.SUPERADMIN_USER || 'superadmin')) {
+      return res.status(400).json({
+        error: 'The superadmin account is not managed here — ask whoever administers the server to reset it via the .env file.'
+      });
+    }
+
+    const user = await User.findOne({
+      $or: [{ username: identifier }, { indexNumber: identifier.toLowerCase() }]
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: 'No account found matching that username or index number.' });
+    }
+
+    user.passwordResetRequested = true;
+    user.passwordResetRequestedAt = new Date();
+    await user.save();
+
+    const notifier = user.role === 'admin' ? 'The superadmin' : 'Your admin';
+    res.json({ message: `Request received. ${notifier} has been notified and will reset your password to a default you can log in with.` });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
 
@@ -152,7 +193,7 @@ router.post('/verify-2fa', async (req, res) => {
     if (!valid) return res.status(400).json({ error: 'Invalid authenticator code.' });
 
     const token = fullToken({ userId: user._id });
-    res.json({ token, user: { id: user._id, username: user.username, role: user.role } });
+    res.json({ token, user: { id: user._id, username: user.username, role: user.role, mustChangePassword: user.mustChangePassword } });
 
   } catch (error) {
     console.error(error);
@@ -206,7 +247,7 @@ router.post('/confirm-2fa-setup', async (req, res) => {
     await user.save();
 
     const token = fullToken({ userId: user._id });
-    res.json({ token, user: { id: user._id, username: user.username, role: user.role } });
+    res.json({ token, user: { id: user._id, username: user.username, role: user.role, mustChangePassword: user.mustChangePassword } });
 
   } catch (error) {
     console.error(error);
@@ -224,7 +265,7 @@ router.get('/me', auth, async (req, res) => {
     return res.json({ user: { id: u._id, fullName: u.fullName, indexNumber: u.indexNumber,
       level: u.level, department: u.department, role: u.role, mustChangePassword: u.mustChangePassword } });
   }
-  res.json({ user: { id: u._id, username: u.username, role: u.role, twoFactorEnabled: u.twoFactorEnabled } });
+  res.json({ user: { id: u._id, username: u.username, role: u.role, twoFactorEnabled: u.twoFactorEnabled, mustChangePassword: u.mustChangePassword } });
 });
 
 // ─── GET ALL USERS ────────────────────────────────────────────────────────
@@ -287,6 +328,70 @@ router.delete('/users/:id/2fa', auth, superAdminAuth, async (req, res) => {
     user.twoFactorPending = false;
     await user.save();
     res.json({ message: `2FA reset for ${user.username}. They will set it up on next login.` });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ─── LIST PENDING PASSWORD RESET REQUESTS ────────────────────────────────
+// GET /api/auth/password-reset-requests
+// Admin sees only course-rep requests; superadmin sees admin + course-rep requests.
+router.get('/password-reset-requests', auth, adminAuth, async (req, res) => {
+  try {
+    const filter = req.userRole === 'superadmin'
+      ? { passwordResetRequested: true }
+      : { passwordResetRequested: true, role: 'course_rep' };
+    const requests = await User.find(filter, '-password -twoFactorSecret')
+      .sort({ passwordResetRequestedAt: 1 });
+    res.json(requests);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ─── RESET A USER'S PASSWORD TO THE DEFAULT ──────────────────────────────
+// POST /api/auth/users/:id/reset-password
+// Admin may only reset course reps. Only superadmin may reset an admin.
+router.post('/users/:id/reset-password', auth, adminAuth, async (req, res) => {
+  try {
+    const target = await User.findById(req.params.id);
+    if (!target) return res.status(404).json({ error: 'User not found.' });
+    if (!['admin', 'course_rep'].includes(target.role)) {
+      return res.status(400).json({ error: 'Cannot reset this account.' });
+    }
+    if (target.role === 'admin' && req.userRole !== 'superadmin') {
+      return res.status(403).json({ error: 'Only the superadmin can reset an admin password.' });
+    }
+
+    const defaultPassword = DEFAULT_RESET_PASSWORD[target.role];
+    target.password = await bcrypt.hash(defaultPassword, 10);
+    target.mustChangePassword = true;
+    target.passwordResetRequested = false;
+    target.passwordResetRequestedAt = null;
+    await target.save();
+
+    res.json({
+      message: `Password reset. Give them the default password "${defaultPassword}" — they'll be required to set a new one on next login.`,
+      defaultPassword
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ─── DISMISS A PASSWORD RESET REQUEST WITHOUT RESETTING ──────────────────
+// POST /api/auth/users/:id/dismiss-reset-request
+router.post('/users/:id/dismiss-reset-request', auth, adminAuth, async (req, res) => {
+  try {
+    const target = await User.findById(req.params.id);
+    if (!target) return res.status(404).json({ error: 'User not found.' });
+    if (target.role === 'admin' && req.userRole !== 'superadmin') {
+      return res.status(403).json({ error: 'Only the superadmin can manage an admin request.' });
+    }
+    target.passwordResetRequested = false;
+    target.passwordResetRequestedAt = null;
+    await target.save();
+    res.json({ message: 'Request dismissed.' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

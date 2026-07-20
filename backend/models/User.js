@@ -22,6 +22,11 @@ const userSchema = new mongoose.Schema({
 
   mustChangePassword: { type: Boolean, default: false },
 
+  // Set when the user clicks "Forgot password?" — surfaces a notification
+  // to whichever admin/superadmin is responsible for resetting it.
+  passwordResetRequested:   { type: Boolean, default: false },
+  passwordResetRequestedAt: { type: Date, default: null },
+
   // 2FA fields (admin only — superadmin uses env var)
   twoFactorSecret:  { type: String, default: null },    // TOTP secret
   twoFactorEnabled: { type: Boolean, default: false },  // true once setup complete

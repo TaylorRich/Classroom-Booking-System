@@ -52,8 +52,37 @@
             </svg>
           </button>
         </div>
+        <div style="text-align:right;margin-top:0.4rem;">
+          <a href="#" id="forgotPasswordLink" style="font-size:0.85rem;">Forgot password?</a>
+        </div>
       </div>
       <button class="login-btn" type="submit" id="loginBtn">Sign In</button>
+    </form>
+  </div>
+</div>
+
+<!-- FORGOT PASSWORD MODAL -->
+<div class="modal-overlay" id="forgotPasswordModal">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <h2>Forgot Password</h2>
+      <button class="modal-close" id="closeForgotModal">✕</button>
+    </div>
+    <p class="modal-body-text">
+      There's no automated email reset yet — enter your username or index number below and
+      your admin (or the superadmin, if you're an admin) will be notified to reset it for you.
+    </p>
+    <form id="forgotPasswordForm">
+      <div class="form-group">
+        <label class="form-label" for="forgotIdentifier">Username / Index Number</label>
+        <input class="form-input" type="text" id="forgotIdentifier" name="identifier"
+               placeholder="e.g. csc/00/01/0000 or administrator" required />
+      </div>
+      <div id="forgotAlert"></div>
+      <div class="btn-row">
+        <button type="button" class="btn btn-outline btn-full" id="cancelForgotBtn">Cancel</button>
+        <button type="submit" class="btn btn-primary btn-full" id="forgotSubmitBtn">Submit Request</button>
+      </div>
     </form>
   </div>
 </div>

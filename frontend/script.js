@@ -62,6 +62,19 @@ function showToast(msg, type = 'success') {
   _toastTimer = setTimeout(() => t?.remove(), 3500);
 }
 
+// Escape a value before inserting it into innerHTML. Course reps can submit
+// free-text review comments (and other fields end up here too), so anything
+// user-supplied must be escaped or it becomes a stored-XSS hole.
+function esc(val) {
+  if (val === null || val === undefined) return '';
+  return String(val)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function fmt(dt) {
   return new Date(dt).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' });
 }
@@ -127,6 +140,16 @@ const LoginPage = {
 
     initPasswordToggles();
     this._inject2FAModal();
+
+    $('forgotPasswordLink')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      $('forgotAlert').innerHTML = '';
+      $('forgotPasswordForm').reset();
+      showModal('forgotPasswordModal');
+    });
+    $('closeForgotModal')?.addEventListener('click', () => closeModal('forgotPasswordModal'));
+    $('cancelForgotBtn')?.addEventListener('click', () => closeModal('forgotPasswordModal'));
+    $('forgotPasswordForm')?.addEventListener('submit', (e) => this.submitForgotPassword(e));
 
     const INDEX_PATTERN = /^[a-zA-Z]+\/.+$/;
 
@@ -313,6 +336,38 @@ const LoginPage = {
       btn.textContent = this.isSetup ? 'Confirm Setup' : 'Verify';
       btn.disabled = false;
     }
+  },
+
+  async submitForgotPassword(e) {
+    e.preventDefault();
+    const btn     = $('forgotSubmitBtn');
+    const alertEl = $('forgotAlert');
+    const identifier = $('forgotIdentifier').value.trim();
+    alertEl.innerHTML = '';
+    if (!identifier) return;
+
+    btn.disabled  = true;
+    btn.innerHTML = '<span class="loader"></span> Submitting…';
+
+    try {
+      const res  = await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ identifier })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alertEl.innerHTML = `<div class="alert alert-success">${esc(data.message)}</div>`;
+        $('forgotPasswordForm').reset();
+      } else {
+        alertEl.innerHTML = `<div class="alert alert-error">${esc(data.error || 'Something went wrong.')}</div>`;
+      }
+    } catch {
+      alertEl.innerHTML = `<div class="alert alert-error">Cannot reach server.</div>`;
+    } finally {
+      btn.disabled  = false;
+      btn.innerHTML = 'Submit Request';
+    }
   }
 };
 
@@ -396,12 +451,12 @@ const CourseRepPage = {
         ${myActive.map(({ classroom: c, booking: b }) => `
           <div class="banner-row">
             <div>
-              <strong>${c.name}</strong>
+              <strong>${esc(c.name)}</strong>
               <div class="booking-time">${fmt(b.startTime)} → ${fmt(b.endTime)}</div>
             </div>
             <div class="banner-actions">
               <button class="btn btn-sm btn-unlock" data-action="unlock"
-                data-cid="${c._id}" data-bid="${b._id}" data-name="${c.name}">🔓 Unlock Early</button>
+                data-cid="${c._id}" data-bid="${b._id}" data-name="${esc(c.name)}">🔓 Unlock Early</button>
               <button class="btn btn-sm btn-gold" data-action="review" data-cid="${c._id}">💬 Review</button>
             </div>
           </div>`).join('')}
@@ -431,17 +486,17 @@ const CourseRepPage = {
         <div class="classroom-card ${locked ? 'locked' : ''}">
           <div class="classroom-header">
             <div>
-              <div class="classroom-name">${c.name}</div>
+              <div class="classroom-name">${esc(c.name)}</div>
               <div class="classroom-capacity">👥 Capacity: ${c.capacity}</div>
             </div>
             <span class="status-badge ${locked ? 'status-locked' : 'status-available'}">
               ${locked ? '🔒 Locked' : '✅ Available'}
             </span>
           </div>
-          ${c.resources?.length ? `<div class="resources-list">${c.resources.map(r => `<span class="resource-chip">${r}</span>`).join('')}</div>` : ''}
+          ${c.resources?.length ? `<div class="resources-list">${c.resources.map(r => `<span class="resource-chip">${esc(r)}</span>`).join('')}</div>` : ''}
           ${locked ? `<div class="booking-time">
-            🔒 Booked by <strong>${activeBooking.courseRep?.fullName || activeBooking.courseRep?.indexNumber || 'Someone'}</strong>
-            ${activeBooking.courseRep?.department ? '(' + activeBooking.courseRep.department + ')' : ''}<br>Until: ${fmt(activeBooking.endTime)}
+            🔒 Booked by <strong>${esc(activeBooking.courseRep?.fullName || activeBooking.courseRep?.indexNumber || 'Someone')}</strong>
+            ${activeBooking.courseRep?.department ? '(' + esc(activeBooking.courseRep.department) + ')' : ''}<br>Until: ${fmt(activeBooking.endTime)}
           </div>` : ''}
           ${avgP ? `
             <div class="ratings-row">
@@ -452,9 +507,9 @@ const CourseRepPage = {
           <div class="card-actions">
             <button class="btn btn-primary btn-sm" style="flex:1;"
               ${locked ? 'disabled' : ''}
-              data-action="book" data-cid="${c._id}" data-name="${c.name}">📅 Book</button>
+              data-action="book" data-cid="${c._id}" data-name="${esc(c.name)}">📅 Book</button>
             ${isMyBooking ? `<button class="btn btn-unlock btn-sm"
-              data-action="unlock" data-cid="${c._id}" data-bid="${activeBooking._id}" data-name="${c.name}">🔓 Unlock</button>` : ''}
+              data-action="unlock" data-cid="${c._id}" data-bid="${activeBooking._id}" data-name="${esc(c.name)}">🔓 Unlock</button>` : ''}
             <button class="btn btn-outline btn-sm" data-action="review" data-cid="${c._id}">💬 Review</button>
           </div>
         </div>`;
@@ -549,6 +604,8 @@ const AdminPage = {
   allReps: [],
   customResources: [],
   confirmCallback: null,
+  resetRequests: [],
+  _notifiedRequests: false,
 
   init() {
     this.user = Auth.getUser();
@@ -608,6 +665,7 @@ const AdminPage = {
     this.renderClassrooms();
     this.renderReps();
     this.renderReviews();
+    await this.loadRequests();
   },
 
   updateStats() {
@@ -635,23 +693,23 @@ const AdminPage = {
         <div class="classroom-card ${!c.isActive ? 'locked' : ''}">
           <div class="classroom-header">
             <div>
-              <div class="classroom-name">${c.name}</div>
+              <div class="classroom-name">${esc(c.name)}</div>
               <div class="classroom-capacity">👥 ${c.capacity}</div>
             </div>
             <span class="status-badge ${c.isActive ? (locked ? 'status-locked' : 'status-available') : 'status-locked'}">
               ${!c.isActive ? '❌ Inactive' : locked ? '🔒 Locked' : '✅ Active'}
             </span>
           </div>
-          ${c.resources?.length ? `<div class="resources-list">${c.resources.map(r => `<span class="resource-chip">${r}</span>`).join('')}</div>` : ''}
+          ${c.resources?.length ? `<div class="resources-list">${c.resources.map(r => `<span class="resource-chip">${esc(r)}</span>`).join('')}</div>` : ''}
           ${locked ? `<div class="booking-time">
-            Booked by <strong>${activeBooking.courseRep?.fullName || activeBooking.courseRep?.indexNumber || 'Unknown'}</strong>
-            ${activeBooking.courseRep?.department ? '(' + activeBooking.courseRep.department + ')' : ''}<br>Until: ${fmt(activeBooking.endTime)}
+            Booked by <strong>${esc(activeBooking.courseRep?.fullName || activeBooking.courseRep?.indexNumber || 'Unknown')}</strong>
+            ${activeBooking.courseRep?.department ? '(' + esc(activeBooking.courseRep.department) + ')' : ''}<br>Until: ${fmt(activeBooking.endTime)}
           </div>` : ''}
           <div class="classroom-meta">${c.bookings.length} bookings · ${c.comments.length} reviews</div>
           <div class="card-actions">
             <button class="btn btn-outline btn-sm" data-action="edit" data-cid="${c._id}">✏️ Edit</button>
             ${locked ? `<button class="btn btn-unlock btn-sm" data-action="unlock"
-              data-cid="${c._id}" data-bid="${activeBooking._id}" data-name="${c.name}">🔓 Unlock</button>` : ''}
+              data-cid="${c._id}" data-bid="${activeBooking._id}" data-name="${esc(c.name)}">🔓 Unlock</button>` : ''}
             <button class="btn btn-sm ${c.isActive ? 'btn-danger' : 'btn-gold'}"
               data-action="toggle" data-cid="${c._id}" data-active="${c.isActive}">
               ${c.isActive ? '❌ Deactivate' : '✅ Reactivate'}
@@ -675,11 +733,11 @@ const AdminPage = {
     }
     tbody.innerHTML = this.allReps.map(r => `
       <tr>
-        <td data-label="Full Name"><strong>${r.fullName || '—'}</strong></td>
-        <td data-label="Index No.">${r.indexNumber || '—'}</td>
-        <td data-label="Level / Dept">${r.level ? `Level ${r.level}` : '—'} · ${r.department || '—'}</td>
+        <td data-label="Full Name"><strong>${esc(r.fullName) || '—'}</strong></td>
+        <td data-label="Index No.">${esc(r.indexNumber) || '—'}</td>
+        <td data-label="Level / Dept">${r.level ? `Level ${r.level}` : '—'} · ${esc(r.department) || '—'}</td>
         <td data-label="Actions">
-          <button class="btn btn-danger btn-sm" data-action="del-rep" data-id="${r._id}" data-name="${r.fullName || r.indexNumber}">Remove</button>
+          <button class="btn btn-danger btn-sm" data-action="del-rep" data-id="${r._id}" data-name="${esc(r.fullName || r.indexNumber)}">Remove</button>
         </td>
       </tr>`).join('');
     tbody.querySelectorAll('[data-action="del-rep"]').forEach(btn =>
@@ -698,9 +756,9 @@ const AdminPage = {
       <div class="review-card">
         <div class="review-meta" style="display:flex;justify-content:space-between;align-items:flex-start;">
           <div>
-            <strong>${r.classroomName}</strong> ·
-            ${r.courseRep?.fullName || r.courseRep?.indexNumber || 'Unknown'}
-            ${r.courseRep?.department ? '(' + r.courseRep.department + ')' : ''} ·
+            <strong>${esc(r.classroomName)}</strong> ·
+            ${esc(r.courseRep?.fullName || r.courseRep?.indexNumber || 'Unknown')}
+            ${r.courseRep?.department ? '(' + esc(r.courseRep.department) + ')' : ''} ·
             ${new Date(r.createdAt).toLocaleDateString('en-GB')}
           </div>
           <button class="btn btn-danger btn-sm" data-action="del-review"
@@ -711,7 +769,7 @@ const AdminPage = {
           Desks: ${'★'.repeat(r.desks||0)}${'☆'.repeat(5-(r.desks||0))} &nbsp;
           Audio: ${'★'.repeat(r.speakers||0)}${'☆'.repeat(5-(r.speakers||0))}
         </div>
-        ${r.comments ? `<p class="review-comment">"${r.comments}"</p>` : ''}
+        ${r.comments ? `<p class="review-comment">"${esc(r.comments)}"</p>` : ''}
       </div>`).join('');
 
     container.querySelectorAll('[data-action="del-review"]').forEach(btn =>
@@ -743,7 +801,7 @@ const AdminPage = {
     const all = [...new Set([...PRESET_RESOURCES, ...this.customResources])];
     $('resourcesCheckGrid').innerHTML = all.map(r => `
       <label class="resource-check-item">
-        <input type="checkbox" value="${r}" ${selected.includes(r) ? 'checked' : ''} /> ${r}
+        <input type="checkbox" value="${esc(r)}" ${selected.includes(r) ? 'checked' : ''} /> ${esc(r)}
       </label>`).join('');
   },
 
@@ -839,6 +897,70 @@ const AdminPage = {
     };
     $('confirmMsg').textContent = `Remove course rep "${name}"? This cannot be undone.`;
     showModal('confirmModal');
+  },
+
+  async loadRequests() {
+    const res  = await api('GET', '/auth/password-reset-requests');
+    const data = await safeJson(res, []);
+    if (!Array.isArray(data)) { showToast(data.error || 'Failed to load requests.', 'error'); return; }
+    this.resetRequests = data;
+    this.renderRequests();
+    if (this.resetRequests.length && !this._notifiedRequests) {
+      this._notifiedRequests = true;
+      showToast(`🔔 ${this.resetRequests.length} pending password reset request(s)`, 'info');
+    }
+  },
+
+  renderRequests() {
+    const container = $('requestsContainer');
+    const badge = $('requestBadge');
+    if (badge) {
+      if (this.resetRequests.length) { badge.style.display = 'inline-block'; badge.textContent = this.resetRequests.length; }
+      else badge.style.display = 'none';
+    }
+    if (!this.resetRequests.length) {
+      container.innerHTML = `<div class="empty-state"><div class="icon">🔔</div><p>No pending password reset requests.</p></div>`;
+      return;
+    }
+    container.innerHTML = this.resetRequests.map(u => `
+      <div class="review-card">
+        <div class="review-meta" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:0.6rem;">
+          <div>
+            <strong>${esc(u.fullName || u.indexNumber)}</strong>
+            <span class="badge badge-rep" style="margin-left:6px;">Course Rep</span>
+            <div style="font-size:0.82rem;color:#888;margin-top:2px;">
+              ${esc(u.indexNumber)} · ${esc(u.department)}
+              ${u.passwordResetRequestedAt ? ' — requested ' + fmt(u.passwordResetRequestedAt) : ''}
+            </div>
+          </div>
+          <div style="display:flex;gap:0.4rem;">
+            <button class="btn btn-outline btn-sm" data-action="dismiss" data-id="${u._id}">Dismiss</button>
+            <button class="btn btn-primary btn-sm" data-action="resolve" data-id="${u._id}" data-name="${esc(u.fullName || u.indexNumber)}">🔑 Reset Password</button>
+          </div>
+        </div>
+      </div>`).join('');
+    container.querySelectorAll('[data-action="resolve"]').forEach(btn =>
+      btn.addEventListener('click', () => this.confirmResetPassword(btn.dataset.id, btn.dataset.name)));
+    container.querySelectorAll('[data-action="dismiss"]').forEach(btn =>
+      btn.addEventListener('click', () => this.dismissRequest(btn.dataset.id)));
+  },
+
+  confirmResetPassword(id, name) {
+    this.confirmCallback = async () => {
+      const res  = await api('POST', `/auth/users/${id}/reset-password`);
+      const data = await safeJson(res, {});
+      if (res && res.ok) { showToast(data.message || 'Password reset.'); this.loadAll(); }
+      else { showToast(data.error || 'Failed to reset password.', 'error'); }
+    };
+    $('confirmMsg').textContent = `Reset password for "${name}" to the default? They'll be required to set a new one on next login.`;
+    showModal('confirmModal');
+  },
+
+  async dismissRequest(id) {
+    const res  = await api('POST', `/auth/users/${id}/dismiss-reset-request`);
+    const data = await safeJson(res, {});
+    if (res && res.ok) { showToast(data.message || 'Request dismissed.'); this.loadRequests(); }
+    else { showToast(data.error || 'Failed to dismiss request.', 'error'); }
   }
 };
 
@@ -850,6 +972,8 @@ const SuperAdminPage = {
   user: null,
   allUsers: [],
   confirmCallback: null,
+  resetRequests: [],
+  _notifiedRequests: false,
 
   init() {
     this.user = Auth.getUser();
@@ -885,6 +1009,7 @@ const SuperAdminPage = {
     this.updateStats();
     this.renderAdmins();
     this.renderReps();
+    await this.loadRequests();
   },
 
   updateStats() {
@@ -899,7 +1024,7 @@ const SuperAdminPage = {
     if (!admins.length) { tbody.innerHTML = `<tr><td colspan="4" class="table-empty">No admins yet.</td></tr>`; return; }
     tbody.innerHTML = admins.map(u => `
       <tr>
-        <td data-label="Username"><strong>${u.username}</strong></td>
+        <td data-label="Username"><strong>${esc(u.username)}</strong></td>
         <td data-label="Role"><span class="badge badge-admin">Admin</span></td>
         <td data-label="2FA">
           ${u.twoFactorEnabled
@@ -907,8 +1032,8 @@ const SuperAdminPage = {
             : '<span style="color:#dc2626;font-weight:600;">⚠️ Not set up</span>'}
         </td>
         <td data-label="Actions" style="display:flex;gap:0.4rem;flex-wrap:wrap;">
-          ${u.twoFactorEnabled ? `<button class="btn btn-sm" style="background:#f59e0b;color:#fff;" data-action="reset2fa" data-id="${u._id}" data-name="${u.username}" title="Reset 2FA so admin sets it up again on next login">Reset 2FA</button>` : ''}
-          <button class="btn btn-danger btn-sm" data-action="del" data-id="${u._id}" data-name="${u.username}">Remove</button>
+          ${u.twoFactorEnabled ? `<button class="btn btn-sm" style="background:#f59e0b;color:#fff;" data-action="reset2fa" data-id="${u._id}" data-name="${esc(u.username)}" title="Reset 2FA so admin sets it up again on next login">Reset 2FA</button>` : ''}
+          <button class="btn btn-danger btn-sm" data-action="del" data-id="${u._id}" data-name="${esc(u.username)}">Remove</button>
         </td>
       </tr>`).join('');
     tbody.querySelectorAll('[data-action="del"]').forEach(btn =>
@@ -935,10 +1060,10 @@ const SuperAdminPage = {
     if (!reps.length) { tbody.innerHTML = `<tr><td colspan="4" class="table-empty">No course reps yet.</td></tr>`; return; }
     tbody.innerHTML = reps.map(u => `
       <tr>
-        <td data-label="Full Name"><strong>${u.fullName || '—'}</strong></td>
-        <td data-label="Index No.">${u.indexNumber || '—'}</td>
-        <td data-label="Level / Dept">${u.level ? `Level ${u.level}` : '—'} · ${u.department || '—'}</td>
-        <td data-label="Actions"><button class="btn btn-danger btn-sm" data-action="del" data-id="${u._id}" data-name="${u.fullName || u.indexNumber}">Remove</button></td>
+        <td data-label="Full Name"><strong>${esc(u.fullName) || '—'}</strong></td>
+        <td data-label="Index No.">${esc(u.indexNumber) || '—'}</td>
+        <td data-label="Level / Dept">${u.level ? `Level ${u.level}` : '—'} · ${esc(u.department) || '—'}</td>
+        <td data-label="Actions"><button class="btn btn-danger btn-sm" data-action="del" data-id="${u._id}" data-name="${esc(u.fullName || u.indexNumber)}">Remove</button></td>
       </tr>`).join('');
     tbody.querySelectorAll('[data-action="del"]').forEach(btn =>
       btn.addEventListener('click', () => this.confirmDelete(btn.dataset.id, btn.dataset.name)));
@@ -989,6 +1114,73 @@ const SuperAdminPage = {
     };
     $('confirmMsg').textContent = `Permanently delete user "${name}"? This cannot be undone.`;
     showModal('confirmModal');
+  },
+
+  async loadRequests() {
+    const res  = await api('GET', '/auth/password-reset-requests');
+    const data = await safeJson(res, []);
+    if (!Array.isArray(data)) { showToast(data.error || 'Failed to load requests.', 'error'); return; }
+    this.resetRequests = data;
+    this.renderRequests();
+    if (this.resetRequests.length && !this._notifiedRequests) {
+      this._notifiedRequests = true;
+      showToast(`🔔 ${this.resetRequests.length} pending password reset request(s)`, 'info');
+    }
+  },
+
+  renderRequests() {
+    const container = $('requestsContainer');
+    const badge = $('requestBadge');
+    if (badge) {
+      if (this.resetRequests.length) { badge.style.display = 'inline-block'; badge.textContent = this.resetRequests.length; }
+      else badge.style.display = 'none';
+    }
+    if (!this.resetRequests.length) {
+      container.innerHTML = `<div class="empty-state"><div class="icon">🔔</div><p>No pending password reset requests.</p></div>`;
+      return;
+    }
+    container.innerHTML = this.resetRequests.map(u => {
+      const isAdmin = u.role === 'admin';
+      return `
+      <div class="review-card">
+        <div class="review-meta" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:0.6rem;">
+          <div>
+            <strong>${esc(isAdmin ? u.username : (u.fullName || u.indexNumber))}</strong>
+            <span class="badge ${isAdmin ? 'badge-admin' : 'badge-rep'}" style="margin-left:6px;">${isAdmin ? 'Admin' : 'Course Rep'}</span>
+            <div style="font-size:0.82rem;color:#888;margin-top:2px;">
+              ${isAdmin ? '' : esc(u.indexNumber) + ' · ' + esc(u.department) + ' — '}
+              ${u.passwordResetRequestedAt ? 'requested ' + fmt(u.passwordResetRequestedAt) : ''}
+            </div>
+          </div>
+          <div style="display:flex;gap:0.4rem;">
+            <button class="btn btn-outline btn-sm" data-action="dismiss" data-id="${u._id}">Dismiss</button>
+            <button class="btn btn-primary btn-sm" data-action="resolve" data-id="${u._id}" data-name="${esc(isAdmin ? u.username : (u.fullName || u.indexNumber))}">🔑 Reset Password</button>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+    container.querySelectorAll('[data-action="resolve"]').forEach(btn =>
+      btn.addEventListener('click', () => this.confirmResetPassword(btn.dataset.id, btn.dataset.name)));
+    container.querySelectorAll('[data-action="dismiss"]').forEach(btn =>
+      btn.addEventListener('click', () => this.dismissRequest(btn.dataset.id)));
+  },
+
+  confirmResetPassword(id, name) {
+    this.confirmCallback = async () => {
+      const res  = await api('POST', `/auth/users/${id}/reset-password`);
+      const data = await safeJson(res, {});
+      if (res && res.ok) { showToast(data.message || 'Password reset.'); this.loadUsers(); }
+      else { showToast(data.error || 'Failed to reset password.', 'error'); }
+    };
+    $('confirmMsg').textContent = `Reset password for "${name}" to the default? They'll be required to set a new one on next login.`;
+    showModal('confirmModal');
+  },
+
+  async dismissRequest(id) {
+    const res  = await api('POST', `/auth/users/${id}/dismiss-reset-request`);
+    const data = await safeJson(res, {});
+    if (res && res.ok) { showToast(data.message || 'Request dismissed.'); this.loadRequests(); }
+    else { showToast(data.error || 'Failed to dismiss request.', 'error'); }
   }
 };
 

@@ -92,6 +92,19 @@ router.delete('/:id', auth, adminAuth, async (req, res) => {
 router.post('/:id/book', auth, async (req, res) => {
   try {
     const { startTime, endTime } = req.body;
+
+    const start = new Date(startTime);
+    const end   = new Date(endTime);
+    if (!startTime || !endTime || isNaN(start) || isNaN(end)) {
+      return res.status(400).json({ error: 'Valid startTime and endTime are required' });
+    }
+    if (end <= start) {
+      return res.status(400).json({ error: 'endTime must be after startTime' });
+    }
+    if (end <= new Date()) {
+      return res.status(400).json({ error: 'Booking end time must be in the future' });
+    }
+
     const classroom = await Classroom.findById(req.params.id);
     if (!classroom) return res.status(404).json({ error: 'Classroom not found' });
     if (!classroom.isActive) return res.status(400).json({ error: 'Classroom is not active' });
