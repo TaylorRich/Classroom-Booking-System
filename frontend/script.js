@@ -2,6 +2,10 @@
    script.js — Central University Classroom Booking System
    ============================================================= */
 
+// Base URL for the backend API. Set in config.js — empty string means
+// "same origin" (local dev). On Vercel this is your deployed backend URL.
+const API_BASE = (window.API_BASE_URL || '').replace(/\/$/, '');
+
 // ─────────────────────────────────────────────────────────────
 // SHARED UTILITIES
 // ─────────────────────────────────────────────────────────────
@@ -24,7 +28,7 @@ const Auth = {
 // Central fetch wrapper — always returns the response object or null
 async function api(method, path, body) {
   try {
-    const res = await fetch('/api' + path, {
+    const res = await fetch(API_BASE + '/api' + path, {
       method,
       headers: {
         'Authorization': `Bearer ${Auth.getToken()}`,
@@ -169,7 +173,7 @@ const LoginPage = {
         : { username: identifier, password };
 
       try {
-        const res  = await fetch('/api/auth/login', {
+        const res  = await fetch(API_BASE + '/api/auth/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body)
@@ -306,7 +310,7 @@ const LoginPage = {
     btn.textContent = '…';
     btn.disabled = true;
 
-    const endpoint = this.isSetup ? '/api/auth/confirm-2fa-setup' : '/api/auth/verify-2fa';
+    const endpoint = API_BASE + (this.isSetup ? '/api/auth/confirm-2fa-setup' : '/api/auth/verify-2fa');
     try {
       const res  = await fetch(endpoint, {
         method: 'POST',
@@ -350,7 +354,7 @@ const LoginPage = {
     btn.innerHTML = '<span class="loader"></span> Submitting…';
 
     try {
-      const res  = await fetch('/api/auth/forgot-password', {
+      const res  = await fetch(API_BASE + '/api/auth/forgot-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ identifier })
@@ -1222,7 +1226,7 @@ const ChangePasswordPage = {
       btn.disabled  = true;
 
       try {
-        const res  = await fetch('/api/auth/change-password', {
+        const res  = await fetch(API_BASE + '/api/auth/change-password', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

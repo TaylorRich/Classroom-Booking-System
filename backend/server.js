@@ -6,7 +6,10 @@ require('dotenv').config();
 
 const app = express();
 
-app.use(cors());
+// If ALLOWED_ORIGIN is set (e.g. your Vercel URL), only that origin can
+// call the API. Leave it unset during local dev to allow any origin.
+const allowedOrigin = process.env.ALLOWED_ORIGIN;
+app.use(cors(allowedOrigin ? { origin: allowedOrigin } : {}));
 app.use(express.json());
 // Use an absolute path so static files resolve correctly regardless of
 // the directory the process was launched from (npm start, pm2, etc.)
