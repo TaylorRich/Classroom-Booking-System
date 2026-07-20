@@ -11,4 +11,4 @@
      Set this to your deployed backend's full URL (no trailing slash),
      e.g. 'https://classroom-booking-backend.onrender.com'
    ============================================================= */
-window.API_BASE_URL = '';
+window.API_BASE_URL = 'https://classroom-booking-system-16v4.onrender.com';
