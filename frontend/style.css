@@ -392,6 +392,14 @@ tbody td { padding: 11px 14px; vertical-align: middle; }
 .login-btn:hover:not(:disabled) { background: var(--maroon-light); box-shadow: var(--shadow-md); transform: translateY(-1px); }
 .login-btn:disabled { opacity: 0.7; cursor: not-allowed; }
 
+/* ── ICONS (Lucide, inlined as SVG) ── */
+.lucide-icon { flex-shrink: 0; }
+.star-icon.star-filled { color: var(--gold); }
+.star-icon.star-empty  { color: var(--grey-200); }
+.star-row { display: inline-flex; gap: 2px; vertical-align: middle; }
+.star-rating label svg { width: 1.5rem; height: 1.5rem; }
+.search-input-wrap { position: relative; display: flex; align-items: center; gap: 6px; }
+
 /* ── ANIMATIONS ── */
 @keyframes fadeUp { from { opacity:0; transform: translateY(10px); } to { opacity:1; transform: none; } }
 

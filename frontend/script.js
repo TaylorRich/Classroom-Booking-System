@@ -222,7 +222,7 @@ const LoginPage = {
     modal.innerHTML = `
       <div style="background:#fff; border-radius:16px; padding:2rem; max-width:420px; width:90%; box-shadow:0 20px 60px rgba(0,0,0,0.3);">
         <div id="twoFASetupSection" style="display:none;">
-          <h2 style="margin:0 0 0.5rem; font-size:1.3rem; color:#1e293b;">🔐 Set Up Two-Factor Authentication</h2>
+          <h2 style="margin:0 0 0.5rem; font-size:1.3rem; color:#1e293b;">${icon('shield-check','w-4 h-4 inline-block align-[-3px]')} Set Up Two-Factor Authentication</h2>
           <p style="color:#64748b; font-size:0.9rem; margin:0 0 1rem;">
             Scan this QR code with <strong>Google Authenticator</strong> (or any TOTP app), then enter the 6-digit code to confirm.
           </p>
@@ -235,7 +235,7 @@ const LoginPage = {
           </details>
         </div>
         <div id="twoFAVerifySection" style="display:none;">
-          <h2 style="margin:0 0 0.5rem; font-size:1.3rem; color:#1e293b;">🔑 Two-Factor Authentication</h2>
+          <h2 style="margin:0 0 0.5rem; font-size:1.3rem; color:#1e293b;">${icon('key','w-4 h-4 inline-block align-[-3px]')} Two-Factor Authentication</h2>
           <p style="color:#64748b; font-size:0.9rem; margin:0 0 1rem;">
             Open <strong>Google Authenticator</strong> and enter the 6-digit code for this account.
           </p>
@@ -321,7 +321,7 @@ const LoginPage = {
 
       if (res.ok) {
         if (data.newTotpSecret) {
-          alert(`✅ 2FA setup complete!\n\nAdd this line to your backend .env file and restart the server:\n\nSUPERADMIN_TOTP_SECRET=${data.newTotpSecret}`);
+          alert(`2FA setup complete!\n\nAdd this line to your backend .env file and restart the server:\n\nSUPERADMIN_TOTP_SECRET=${data.newTotpSecret}`);
         }
         this._hide2FAModal();
         Auth.save(data.token, data.user);
@@ -393,7 +393,7 @@ const CourseRepPage = {
     }
 
     $('navUsername').textContent = this.user.fullName || this.user.indexNumber || 'Course Rep';
-    if (this.user.department) $('deptLabel').textContent = '📚 ' + this.user.department;
+    if (this.user.department) $('deptLabel').innerHTML = icon('book-open','w-4 h-4 inline-block align-[-3px]') + ' ' + esc(this.user.department);
 
     $('logoutBtn').addEventListener('click',        () => { Auth.clear(); window.location.href = 'index.html'; });
     $('searchInput').addEventListener('input',      () => this.filterClassrooms());
@@ -412,13 +412,13 @@ const CourseRepPage = {
 
   async loadClassrooms() {
     const grid = $('classroomsGrid');
-    grid.innerHTML = `<div class="empty-state"><div class="icon">⏳</div><p>Loading classrooms…</p></div>`;
+    grid.innerHTML = `<div class="empty-state"><div class="icon">${icon('hourglass','w-10 h-10 mx-auto mb-2 opacity-60')}</div><p>Loading classrooms…</p></div>`;
 
     const res  = await api('GET', '/classrooms');
     const data = await safeJson(res, []);
 
     if (!Array.isArray(data)) {
-      grid.innerHTML = `<div class="empty-state"><div class="icon">⚠️</div><p>${data.error || 'Failed to load classrooms.'}</p></div>`;
+      grid.innerHTML = `<div class="empty-state"><div class="icon">${icon('triangle-alert','w-10 h-10 mx-auto mb-2 opacity-60')}</div><p>${data.error || 'Failed to load classrooms.'}</p></div>`;
       return;
     }
 
@@ -451,17 +451,17 @@ const CourseRepPage = {
 
     banner.innerHTML = `
       <div class="card banner-card">
-        <div class="card-header"><h3>🔴 My Active Bookings</h3></div>
+        <div class="card-header"><h3>${icon('circle-dot','w-5 h-5 inline-block align-[-4px] text-red-600')} My Active Bookings</h3></div>
         ${myActive.map(({ classroom: c, booking: b }) => `
           <div class="banner-row">
             <div>
               <strong>${esc(c.name)}</strong>
-              <div class="booking-time">${fmt(b.startTime)} → ${fmt(b.endTime)}</div>
+              <div class="booking-time">${fmt(b.startTime)} ${icon('arrow-right','w-3.5 h-3.5 inline-block align-[-2px] mx-1')} ${fmt(b.endTime)}</div>
             </div>
             <div class="banner-actions">
               <button class="btn btn-sm btn-unlock" data-action="unlock"
-                data-cid="${c._id}" data-bid="${b._id}" data-name="${esc(c.name)}">🔓 Unlock Early</button>
-              <button class="btn btn-sm btn-gold" data-action="review" data-cid="${c._id}">💬 Review</button>
+                data-cid="${c._id}" data-bid="${b._id}" data-name="${esc(c.name)}">${icon('lock-open','w-4 h-4 inline-block align-[-3px]')} Unlock Early</button>
+              <button class="btn btn-sm btn-gold" data-action="review" data-cid="${c._id}">${icon('message-square','w-4 h-4 inline-block align-[-3px]')} Review</button>
             </div>
           </div>`).join('')}
       </div>`;
@@ -475,7 +475,7 @@ const CourseRepPage = {
   renderGrid(list) {
     const grid = $('classroomsGrid');
     if (!list || !list.length) {
-      grid.innerHTML = `<div class="empty-state"><div class="icon">🏫</div><p>No classrooms found.</p></div>`;
+      grid.innerHTML = `<div class="empty-state"><div class="icon">${icon('school','w-10 h-10 mx-auto mb-2 opacity-60')}</div><p>No classrooms found.</p></div>`;
       return;
     }
     const now = new Date();
@@ -491,15 +491,15 @@ const CourseRepPage = {
           <div class="classroom-header">
             <div>
               <div class="classroom-name">${esc(c.name)}</div>
-              <div class="classroom-capacity">👥 Capacity: ${c.capacity}</div>
+              <div class="classroom-capacity">${icon('users','w-4 h-4 inline-block align-[-3px]')} Capacity: ${c.capacity}</div>
             </div>
             <span class="status-badge ${locked ? 'status-locked' : 'status-available'}">
-              ${locked ? '🔒 Locked' : '✅ Available'}
+              ${locked ? icon('lock','w-4 h-4 inline-block align-[-3px]') + ' Locked' : icon('circle-check','w-4 h-4 inline-block align-[-3px]') + ' Available'}
             </span>
           </div>
           ${c.resources?.length ? `<div class="resources-list">${c.resources.map(r => `<span class="resource-chip">${esc(r)}</span>`).join('')}</div>` : ''}
           ${locked ? `<div class="booking-time">
-            🔒 Booked by <strong>${esc(activeBooking.courseRep?.fullName || activeBooking.courseRep?.indexNumber || 'Someone')}</strong>
+            ${icon('lock','w-4 h-4 inline-block align-[-3px]')} Booked by <strong>${esc(activeBooking.courseRep?.fullName || activeBooking.courseRep?.indexNumber || 'Someone')}</strong>
             ${activeBooking.courseRep?.department ? '(' + esc(activeBooking.courseRep.department) + ')' : ''}<br>Until: ${fmt(activeBooking.endTime)}
           </div>` : ''}
           ${avgP ? `
@@ -511,10 +511,10 @@ const CourseRepPage = {
           <div class="card-actions">
             <button class="btn btn-primary btn-sm" style="flex:1;"
               ${locked ? 'disabled' : ''}
-              data-action="book" data-cid="${c._id}" data-name="${esc(c.name)}">📅 Book</button>
+              data-action="book" data-cid="${c._id}" data-name="${esc(c.name)}">${icon('calendar','w-4 h-4 inline-block align-[-3px]')} Book</button>
             ${isMyBooking ? `<button class="btn btn-unlock btn-sm"
-              data-action="unlock" data-cid="${c._id}" data-bid="${activeBooking._id}" data-name="${esc(c.name)}">🔓 Unlock</button>` : ''}
-            <button class="btn btn-outline btn-sm" data-action="review" data-cid="${c._id}">💬 Review</button>
+              data-action="unlock" data-cid="${c._id}" data-bid="${activeBooking._id}" data-name="${esc(c.name)}">${icon('lock-open','w-4 h-4 inline-block align-[-3px]')} Unlock</button>` : ''}
+            <button class="btn btn-outline btn-sm" data-action="review" data-cid="${c._id}">${icon('message-square','w-4 h-4 inline-block align-[-3px]')} Review</button>
           </div>
         </div>`;
     }).join('');
@@ -654,7 +654,7 @@ const AdminPage = {
 
     if (!Array.isArray(classroomsData)) {
       showToast(classroomsData.error || 'Failed to load classrooms.', 'error');
-      $('classroomsGrid').innerHTML = `<div class="empty-state"><div class="icon">⚠️</div><p>${classroomsData.error || 'Could not load classrooms.'}</p></div>`;
+      $('classroomsGrid').innerHTML = `<div class="empty-state"><div class="icon">${icon('triangle-alert','w-10 h-10 mx-auto mb-2 opacity-60')}</div><p>${classroomsData.error || 'Could not load classrooms.'}</p></div>`;
       return;
     }
     if (!Array.isArray(usersData)) {
@@ -687,7 +687,7 @@ const AdminPage = {
     const now  = new Date();
     const grid = $('classroomsGrid');
     if (!this.allClassrooms.length) {
-      grid.innerHTML = `<div class="empty-state"><div class="icon">🏫</div><p>No classrooms yet. Add one above.</p></div>`;
+      grid.innerHTML = `<div class="empty-state"><div class="icon">${icon('school','w-10 h-10 mx-auto mb-2 opacity-60')}</div><p>No classrooms yet. Add one above.</p></div>`;
       return;
     }
     grid.innerHTML = this.allClassrooms.map(c => {
@@ -698,10 +698,10 @@ const AdminPage = {
           <div class="classroom-header">
             <div>
               <div class="classroom-name">${esc(c.name)}</div>
-              <div class="classroom-capacity">👥 ${c.capacity}</div>
+              <div class="classroom-capacity">${icon('users','w-4 h-4 inline-block align-[-3px]')} ${c.capacity}</div>
             </div>
             <span class="status-badge ${c.isActive ? (locked ? 'status-locked' : 'status-available') : 'status-locked'}">
-              ${!c.isActive ? '❌ Inactive' : locked ? '🔒 Locked' : '✅ Active'}
+              ${!c.isActive ? icon('circle-x','w-4 h-4 inline-block align-[-3px]') + ' Inactive' : locked ? icon('lock','w-4 h-4 inline-block align-[-3px]') + ' Locked' : icon('circle-check','w-4 h-4 inline-block align-[-3px]') + ' Active'}
             </span>
           </div>
           ${c.resources?.length ? `<div class="resources-list">${c.resources.map(r => `<span class="resource-chip">${esc(r)}</span>`).join('')}</div>` : ''}
@@ -711,12 +711,12 @@ const AdminPage = {
           </div>` : ''}
           <div class="classroom-meta">${c.bookings.length} bookings · ${c.comments.length} reviews</div>
           <div class="card-actions">
-            <button class="btn btn-outline btn-sm" data-action="edit" data-cid="${c._id}">✏️ Edit</button>
+            <button class="btn btn-outline btn-sm" data-action="edit" data-cid="${c._id}">${icon('pencil','w-4 h-4 inline-block align-[-3px]')} Edit</button>
             ${locked ? `<button class="btn btn-unlock btn-sm" data-action="unlock"
-              data-cid="${c._id}" data-bid="${activeBooking._id}" data-name="${esc(c.name)}">🔓 Unlock</button>` : ''}
+              data-cid="${c._id}" data-bid="${activeBooking._id}" data-name="${esc(c.name)}">${icon('lock-open','w-4 h-4 inline-block align-[-3px]')} Unlock</button>` : ''}
             <button class="btn btn-sm ${c.isActive ? 'btn-danger' : 'btn-gold'}"
               data-action="toggle" data-cid="${c._id}" data-active="${c.isActive}">
-              ${c.isActive ? '❌ Deactivate' : '✅ Reactivate'}
+              ${c.isActive ? icon('circle-x','w-4 h-4 inline-block align-[-3px]') + ' Deactivate' : icon('circle-check','w-4 h-4 inline-block align-[-3px]') + ' Reactivate'}
             </button>
           </div>
         </div>`;
@@ -754,7 +754,7 @@ const AdminPage = {
     this.allClassrooms.forEach(c => c.comments.forEach(r => all.push({ ...r, classroomName: c.name, classroomId: c._id })));
     all.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
     if (!all.length) {
-      container.innerHTML = `<div class="empty-state"><div class="icon">💬</div><p>No reviews yet.</p></div>`; return;
+      container.innerHTML = `<div class="empty-state"><div class="icon">${icon('message-square','w-10 h-10 mx-auto mb-2 opacity-60')}</div><p>No reviews yet.</p></div>`; return;
     }
     container.innerHTML = all.map(r => `
       <div class="review-card">
@@ -766,12 +766,12 @@ const AdminPage = {
             ${new Date(r.createdAt).toLocaleDateString('en-GB')}
           </div>
           <button class="btn btn-danger btn-sm" data-action="del-review"
-            data-cid="${r.classroomId}" data-rid="${r._id}">🗑 Delete</button>
+            data-cid="${r.classroomId}" data-rid="${r._id}">${icon('trash-2','w-4 h-4 inline-block align-[-3px]')} Delete</button>
         </div>
         <div class="review-stars">
-          Projector: ${'★'.repeat(r.projector||0)}${'☆'.repeat(5-(r.projector||0))} &nbsp;
-          Desks: ${'★'.repeat(r.desks||0)}${'☆'.repeat(5-(r.desks||0))} &nbsp;
-          Audio: ${'★'.repeat(r.speakers||0)}${'☆'.repeat(5-(r.speakers||0))}
+          Projector: ${starRow(r.projector||0)} &nbsp;
+          Desks: ${starRow(r.desks||0)} &nbsp;
+          Audio: ${starRow(r.speakers||0)}
         </div>
         ${r.comments ? `<p class="review-comment">"${esc(r.comments)}"</p>` : ''}
       </div>`).join('');
@@ -911,7 +911,7 @@ const AdminPage = {
     this.renderRequests();
     if (this.resetRequests.length && !this._notifiedRequests) {
       this._notifiedRequests = true;
-      showToast(`🔔 ${this.resetRequests.length} pending password reset request(s)`, 'info');
+      showToast(`${this.resetRequests.length} pending password reset request(s)`, 'info');
     }
   },
 
@@ -923,7 +923,7 @@ const AdminPage = {
       else badge.style.display = 'none';
     }
     if (!this.resetRequests.length) {
-      container.innerHTML = `<div class="empty-state"><div class="icon">🔔</div><p>No pending password reset requests.</p></div>`;
+      container.innerHTML = `<div class="empty-state"><div class="icon">${icon('bell','w-10 h-10 mx-auto mb-2 opacity-60')}</div><p>No pending password reset requests.</p></div>`;
       return;
     }
     container.innerHTML = this.resetRequests.map(u => `
@@ -939,7 +939,7 @@ const AdminPage = {
           </div>
           <div style="display:flex;gap:0.4rem;">
             <button class="btn btn-outline btn-sm" data-action="dismiss" data-id="${u._id}">Dismiss</button>
-            <button class="btn btn-primary btn-sm" data-action="resolve" data-id="${u._id}" data-name="${esc(u.fullName || u.indexNumber)}">🔑 Reset Password</button>
+            <button class="btn btn-primary btn-sm" data-action="resolve" data-id="${u._id}" data-name="${esc(u.fullName || u.indexNumber)}">${icon('key','w-4 h-4 inline-block align-[-3px]')} Reset Password</button>
           </div>
         </div>
       </div>`).join('');
@@ -1032,8 +1032,8 @@ const SuperAdminPage = {
         <td data-label="Role"><span class="badge badge-admin">Admin</span></td>
         <td data-label="2FA">
           ${u.twoFactorEnabled
-            ? '<span style="color:#16a34a;font-weight:600;">✅ Enabled</span>'
-            : '<span style="color:#dc2626;font-weight:600;">⚠️ Not set up</span>'}
+            ? '<span style="color:#16a34a;font-weight:600;">' + icon('circle-check','w-4 h-4 inline-block align-[-3px]') + ' Enabled</span>'
+            : '<span style="color:#dc2626;font-weight:600;">' + icon('triangle-alert','w-4 h-4 inline-block align-[-3px]') + ' Not set up</span>'}
         </td>
         <td data-label="Actions" style="display:flex;gap:0.4rem;flex-wrap:wrap;">
           ${u.twoFactorEnabled ? `<button class="btn btn-sm" style="background:#f59e0b;color:#fff;" data-action="reset2fa" data-id="${u._id}" data-name="${esc(u.username)}" title="Reset 2FA so admin sets it up again on next login">Reset 2FA</button>` : ''}
@@ -1128,7 +1128,7 @@ const SuperAdminPage = {
     this.renderRequests();
     if (this.resetRequests.length && !this._notifiedRequests) {
       this._notifiedRequests = true;
-      showToast(`🔔 ${this.resetRequests.length} pending password reset request(s)`, 'info');
+      showToast(`${this.resetRequests.length} pending password reset request(s)`, 'info');
     }
   },
 
@@ -1140,7 +1140,7 @@ const SuperAdminPage = {
       else badge.style.display = 'none';
     }
     if (!this.resetRequests.length) {
-      container.innerHTML = `<div class="empty-state"><div class="icon">🔔</div><p>No pending password reset requests.</p></div>`;
+      container.innerHTML = `<div class="empty-state"><div class="icon">${icon('bell','w-10 h-10 mx-auto mb-2 opacity-60')}</div><p>No pending password reset requests.</p></div>`;
       return;
     }
     container.innerHTML = this.resetRequests.map(u => {
@@ -1158,7 +1158,7 @@ const SuperAdminPage = {
           </div>
           <div style="display:flex;gap:0.4rem;">
             <button class="btn btn-outline btn-sm" data-action="dismiss" data-id="${u._id}">Dismiss</button>
-            <button class="btn btn-primary btn-sm" data-action="resolve" data-id="${u._id}" data-name="${esc(isAdmin ? u.username : (u.fullName || u.indexNumber))}">🔑 Reset Password</button>
+            <button class="btn btn-primary btn-sm" data-action="resolve" data-id="${u._id}" data-name="${esc(isAdmin ? u.username : (u.fullName || u.indexNumber))}">${icon('key','w-4 h-4 inline-block align-[-3px]')} Reset Password</button>
           </div>
         </div>
       </div>`;
@@ -1238,7 +1238,7 @@ const ChangePasswordPage = {
         if (res.ok) {
           const updatedUser = { ...user, mustChangePassword: false };
           Auth.save(token, updatedUser);
-          alertEl.textContent = '✅ Password changed! Redirecting…';
+          alertEl.textContent = 'Password changed! Redirecting…';
           alertEl.className = 'alert alert-success';
           alertEl.style.display = 'block';
           setTimeout(() => Auth.redirectByRole(user.role), 1200);

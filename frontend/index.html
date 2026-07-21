@@ -4,6 +4,10 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Classroom Booking — Central University</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = { corePlugins: { preflight: false } };
+  </script>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -66,7 +70,8 @@
   <div class="modal modal-sm">
     <div class="modal-header">
       <h2>Forgot Password</h2>
-      <button class="modal-close" id="closeForgotModal">✕</button>
+      <button class="modal-close" id="closeForgotModal"><svg class="lucide-icon w-4 h-4 inline-block align-[-3px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18" />
+  <path d="m6 6 12 12" /></svg></button>
     </div>
     <p class="modal-body-text">
       There's no automated email reset yet — enter your username or index number below and
@@ -88,6 +93,7 @@
 </div>
 
 <script src="config.js"></script>
+<script src="icons.js"></script>
 <script src="script.js"></script>
 <script>
   LoginPage.init();
